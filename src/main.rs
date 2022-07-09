@@ -1,10 +1,11 @@
-use std::{collections::HashMap, future, io, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, future, io, path::PathBuf};
 use tokio::{
-    fs,
     io::{unix::AsyncFd, Interest},
     task,
 };
 
+mod brightness_device;
+use brightness_device::BrightnessDevice;
 mod logind_session;
 use logind_session::LogindSessionProxy;
 
@@ -15,44 +16,6 @@ use logind_session::LogindSessionProxy;
 
 static DBUS_NAME: &str = "com.system76.CosmicSettingDaemon";
 static DBUS_PATH: &str = "/com/system76/CosmicSettingDaemon";
-
-struct BrightnessDevice {
-    subsystem: &'static str,
-    sysname: String,
-    max_brightness: u32,
-}
-
-impl BrightnessDevice {
-    async fn new(subsystem: &'static str, sysname: String) -> io::Result<Self> {
-        let path = format!("/sys/class/{}/{}/max_brightness", subsystem, &sysname);
-        let value = fs::read_to_string(&path).await?;
-        let max_brightness = u32::from_str(value.trim()).unwrap(); // XXX
-        Ok(Self {
-            subsystem,
-            sysname,
-            max_brightness,
-        })
-    }
-    async fn brightness(&self) -> io::Result<u32> {
-        let path = format!("/sys/class/{}/{}/brightness", self.subsystem, &self.sysname);
-        let value = fs::read_to_string(&path).await?;
-        Ok(u32::from_str(value.trim()).unwrap()) // XXX
-    }
-
-    fn max_brightness(&self) -> u32 {
-        self.max_brightness
-    }
-
-    async fn set_brightness(
-        &self,
-        logind_session: &LogindSessionProxy<'_>,
-        value: u32,
-    ) -> zbus::Result<()> {
-        logind_session
-            .set_brightness(self.subsystem, &self.sysname, value)
-            .await
-    }
-}
 
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
@@ -229,10 +192,6 @@ async fn main() -> zbus::Result<()> {
                 .await?;
 
             task::spawn_local(async move { backlight_monitor_task(backlights, connection) });
-
-            // let ctxt = zbus::SignalContext::new(&connection, DBUS_PATH);
-            // SettingsDaemon::display_brightness_changed(&ctxt);
-            // zbus::fdo::Properties::properties_changed(&ctxt, DBUS_NAME, HashMap::new(), &[]);
 
             future::pending::<()>().await;
 
