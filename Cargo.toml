@@ -1,0 +1,11 @@
+[package]
+name = "cosmic-settings-daemon"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+clap = "3.2.8"
+tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
+udev = "0.6.3"
+zbus = { version = "2.3.2", default-features = false, features = ["tokio"] }
