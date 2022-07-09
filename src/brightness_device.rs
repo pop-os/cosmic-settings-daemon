@@ -1,7 +1,11 @@
-use std::{io, str::FromStr};
+use std::{error::Error, io, str::FromStr};
 use tokio::fs;
 
 use crate::LogindSessionProxy;
+
+fn invalid_data<E: Error + Send + Sync + 'static>(err: E) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidData, err)
+}
 
 pub struct BrightnessDevice {
     subsystem: &'static str,
@@ -13,7 +17,7 @@ impl BrightnessDevice {
     pub async fn new(subsystem: &'static str, sysname: String) -> io::Result<Self> {
         let path = format!("/sys/class/{}/{}/max_brightness", subsystem, &sysname);
         let value = fs::read_to_string(&path).await?;
-        let max_brightness = u32::from_str(value.trim()).unwrap(); // XXX
+        let max_brightness = u32::from_str(value.trim()).map_err(invalid_data)?;
         Ok(Self {
             subsystem,
             sysname,
@@ -23,7 +27,7 @@ impl BrightnessDevice {
     pub async fn brightness(&self) -> io::Result<u32> {
         let path = format!("/sys/class/{}/{}/brightness", self.subsystem, &self.sysname);
         let value = fs::read_to_string(&path).await?;
-        Ok(u32::from_str(value.trim()).unwrap()) // XXX
+        Ok(u32::from_str(value.trim()).map_err(invalid_data)?)
     }
 
     pub fn max_brightness(&self) -> u32 {

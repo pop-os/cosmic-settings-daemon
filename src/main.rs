@@ -167,7 +167,13 @@ async fn backlight_monitor_task(
 async fn main() -> zbus::Result<()> {
     task::LocalSet::new()
         .run_until(async {
-            let backlights = backlight_enumerate().unwrap(); // XXX
+            let backlights = match backlight_enumerate() {
+                Ok(backlights) => backlights,
+                Err(err) => {
+                    eprintln!("Failed to enumerate backlights: {}", err);
+                    Vec::new()
+                }
+            };
             let backlights: HashMap<_, _> = backlights
                 .into_iter()
                 .map(|i| (i.syspath().to_owned(), i))
