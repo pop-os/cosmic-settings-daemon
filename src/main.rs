@@ -14,15 +14,15 @@ use logind_session::LogindSessionProxy;
 // TODO: notifications; statusnotifierwatcher
 // Scale brightness to 0 to 100? Or something else? Float?
 
-static DBUS_NAME: &str = "com.system76.CosmicSettingDaemon";
-static DBUS_PATH: &str = "/com/system76/CosmicSettingDaemon";
+static DBUS_NAME: &str = "com.system76.CosmicSettingsDaemon";
+static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
 
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
     display_brightness_device: Option<BrightnessDevice>,
 }
 
-#[zbus::dbus_interface(name = "com.system76.CosmicSettingDaemon")]
+#[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon")]
 impl SettingsDaemon {
     #[dbus_interface(property)]
     async fn display_brightness(&self) -> i32 {
@@ -60,12 +60,18 @@ impl SettingsDaemon {
 
     async fn increase_display_brightness(&self) {
         let value = self.display_brightness().await;
-        self.set_display_brightness(value.saturating_add(10)).await;
+        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
+            let step = brightness_device.brightness_step() as i32;
+            self.set_display_brightness((value + step).max(0)).await;
+        }
     }
 
     async fn decrease_display_brightness(&self) {
         let value = self.display_brightness().await;
-        self.set_display_brightness(value.saturating_sub(10)).await;
+        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
+            let step = brightness_device.brightness_step() as i32;
+            self.set_display_brightness((value - step).max(0)).await;
+        }
     }
 
     async fn increase_keyboard_brightness(&self) {}

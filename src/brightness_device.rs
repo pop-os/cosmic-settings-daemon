@@ -43,4 +43,10 @@ impl BrightnessDevice {
             .set_brightness(self.subsystem, &self.sysname, value)
             .await
     }
+
+    // Matches definition used in gnome-settings-daemon, which seems to work
+    // well enough.
+    pub fn brightness_step(&self) -> u32 {
+        (self.max_brightness / 20).max(1)
+    }
 }
