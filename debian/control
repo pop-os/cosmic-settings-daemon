@@ -6,6 +6,8 @@ Build-Depends:
   debhelper (>= 11),
   debhelper-compat (= 11),
   cargo,
+  libudev-dev,
+  pkg-config,
 Standards-Version: 4.3.0
 Homepage: https://github.com/pop-os/cosmic-settings-daemon
 
