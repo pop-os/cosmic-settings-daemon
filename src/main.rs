@@ -11,7 +11,7 @@ use logind_session::LogindSessionProxy;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
-// TODO: notifications; statusnotifierwatcher
+// TODO: notifications; statusnotifierwatcher, media keybindings
 // Scale brightness to 0 to 100? Or something else? Float?
 
 static DBUS_NAME: &str = "com.system76.CosmicSettingsDaemon";
