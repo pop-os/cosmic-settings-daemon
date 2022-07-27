@@ -89,7 +89,7 @@ fn backlight_monitor() -> io::Result<AsyncFd<udev::MonitorSocket>> {
     let socket = udev::MonitorBuilder::new()?
         .match_subsystem("backlight")?
         .listen()?;
-    AsyncFd::with_interest(socket, Interest::READABLE)
+    AsyncFd::with_interest(socket, Interest::READABLE | Interest::WRITABLE)
 }
 
 // Choose backlight with most "precision". This is what `light` does.
@@ -129,7 +129,7 @@ async fn backlight_monitor_task(
     match backlight_monitor() {
         Ok(mut socket) => {
             loop {
-                let mut socket = socket.readable_mut().await.unwrap(); // XXX
+                let mut socket = socket.writable_mut().await.unwrap(); // XXX
                 for evt in socket.get_inner_mut() {
                     eprintln!("{:?}: {:?}", evt.event_type(), evt.device());
                     match evt.event_type() {
@@ -163,6 +163,7 @@ async fn backlight_monitor_task(
                         _ => {}
                     }
                 }
+                socket.clear_ready();
             }
         }
         Err(err) => eprintln!("Error creating udev backlight monitor: {}", err),
@@ -203,7 +204,9 @@ async fn main() -> zbus::Result<()> {
                 .build()
                 .await?;
 
-            task::spawn_local(async move { backlight_monitor_task(backlights, connection) });
+            task::spawn_local(async move {
+                backlight_monitor_task(backlights, connection).await;
+            });
 
             future::pending::<()>().await;
 
