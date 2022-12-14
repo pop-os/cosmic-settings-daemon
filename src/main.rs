@@ -58,19 +58,28 @@ impl SettingsDaemon {
     #[dbus_interface(property)]
     async fn set_keyboard_brightness(&self, value: i32) {}
 
-    async fn increase_display_brightness(&self) {
+    async fn increase_display_brightness(
+        &self,
+        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+    ) {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
             self.set_display_brightness((value + step).max(0)).await;
+            self.display_brightness_changed(&ctxt).await;
         }
     }
 
-    async fn decrease_display_brightness(&self) {
+    async fn decrease_display_brightness(
+        &self,
+
+        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+    ) {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
             self.set_display_brightness((value - step).max(0)).await;
+            self.display_brightness_changed(&ctxt).await;
         }
     }
 
