@@ -139,7 +139,7 @@ async fn backlight_monitor_task(
         Ok(mut socket) => {
             loop {
                 let mut socket = socket.writable_mut().await.unwrap(); // XXX
-                for evt in socket.get_inner_mut() {
+                for evt in socket.get_inner().iter() {
                     eprintln!("{:?}: {:?}", evt.event_type(), evt.device());
                     match evt.event_type() {
                         udev::EventType::Add => {
