@@ -5,7 +5,6 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-clap = "4.2.7"
 tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
 zbus = { version = "3.13.0", default-features = false, features = ["tokio"] }
