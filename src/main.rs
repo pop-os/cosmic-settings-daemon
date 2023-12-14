@@ -1,7 +1,13 @@
 use notify::{event::ModifyKind, EventKind, Watcher};
-use std::{collections::HashMap, future, io, path::PathBuf, sync::atomic::Ordering};
+use std::{
+    collections::HashMap,
+    future, io,
+    path::PathBuf,
+    sync::{atomic::Ordering, Arc},
+};
 use tokio::{
     io::{unix::AsyncFd, Interest},
+    sync::{oneshot, RwLock},
     task,
 };
 
@@ -25,16 +31,35 @@ static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
     display_brightness_device: Option<BrightnessDevice>,
-    watched_configs:
-        HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>,
-    watched_states:
-        HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>,
+    watched_configs: Arc<
+        RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
+    >,
+    watched_states: Arc<
+        RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
+    >,
 }
 
 #[derive(Debug)]
 enum Config {
-    Config,
-    State,
+    Config(Option<oneshot::Sender<()>>),
+    State(Option<oneshot::Sender<()>>),
+}
+
+impl Config {
+    fn new_config() -> Self {
+        Self::Config(None)
+    }
+
+    fn new_state() -> Self {
+        Self::State(None)
+    }
+
+    fn set_tx(&mut self, tx: oneshot::Sender<()>) {
+        match self {
+            Self::Config(ref mut tx_opt) => *tx_opt = Some(tx),
+            Self::State(ref mut tx_opt) => *tx_opt = Some(tx),
+        }
+    }
 }
 
 #[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon.Config")]
@@ -44,19 +69,31 @@ impl Config {
 
     /// Requests the client to call the pong method
     /// If the client does not call pong within 1 minute, the client is considered dead
-    /// and the config is removed   
+    /// and the config is no longer watched
     #[dbus_interface(signal)]
     async fn ping(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
 
     /// Acknowledges the ping request
-    async fn pong(&self) -> zbus::fdo::Result<()> {
+    async fn pong(&mut self) -> zbus::fdo::Result<()> {
+        match self {
+            Self::Config(ref mut tx_opt) => {
+                if let Some(tx) = tx_opt.take() {
+                    let _ = tx.send(());
+                }
+            }
+            Self::State(ref mut tx_opt) => {
+                if let Some(tx) = tx_opt.take() {
+                    let _ = tx.send(());
+                }
+            }
+        }
         Ok(())
     }
 }
 
 impl Config {
     fn path(&self, id: &str, version: u64) -> ObjectPath<'static> {
-        let cfg_type = if matches!(self, Config::State) {
+        let cfg_type = if matches!(self, Config::State(_)) {
             "State"
         } else {
             "Config"
@@ -78,7 +115,7 @@ impl Config {
     }
 
     fn name(&self, id: &str, version: u64) -> WellKnownName<'static> {
-        let cfg_type = if matches!(self, Config::State) {
+        let cfg_type = if matches!(self, Config::State(_)) {
             "State"
         } else {
             "Config"
@@ -168,9 +205,30 @@ impl SettingsDaemon {
         version: u64,
     ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
         // create a new config, return the path and add it to our hashmap
-        let config = Config::Config;
+        Self::watch_config_inner(self, Config::new_config(), id, version).await
+    }
 
-        if let Some((_, path, name)) = self.watched_configs.get(&(id.to_string(), version)) {
+    async fn watch_state(
+        &mut self,
+        id: &str,
+        version: u64,
+    ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
+        Self::watch_config_inner(self, Config::new_state(), id, version).await
+    }
+}
+
+impl SettingsDaemon {
+    async fn watch_config_inner(
+        &mut self,
+        config: Config,
+        id: &str,
+        version: u64,
+    ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
+        let configs = match config {
+            Config::Config(_) => &self.watched_configs,
+            Config::State(_) => &self.watched_states,
+        };
+        if let Some((_, path, name)) = configs.read().await.get(&(id.to_string(), version)) {
             return Ok((path.to_owned(), name.to_owned()));
         }
         let path = config.path(id, version);
@@ -180,32 +238,52 @@ impl SettingsDaemon {
             .serve_at(path.to_owned(), config)?
             .build()
             .await?;
-        self.watched_configs.insert(
-            (id.to_owned(), version),
-            (conn, path.to_owned(), name.to_owned()),
-        );
-        Ok((path.to_owned(), name.to_owned()))
-    }
 
-    async fn watch_state(
-        &mut self,
-        id: &str,
-        version: u64,
-    ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
-        // create a new state, return the path and add it to our hashmap
-        let state = Config::State;
+        let id_clone = id.to_owned();
+        let path_clone = path.to_owned();
+        let configs_clone = configs.clone();
+        tokio::task::spawn(async move {
+            // wait 10 minutes then send ping and wait for pong or remove
+            // repeat until removed
+            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 10));
+            loop {
+                interval.tick().await;
+                let read_guard = configs_clone.read().await;
+                let Some(conn) = read_guard
+                    .get(&(id_clone.clone(), version))
+                    .map(|c| c.0.clone())
+                else {
+                    break;
+                };
+                drop(read_guard);
 
-        if let Some((_, path, name)) = self.watched_states.get(&(id.to_string(), version)) {
-            return Ok((path.to_owned(), name.to_owned()));
-        }
-        let path = state.path(id, version);
-        let name = state.name(id, version);
-        let conn = zbus::ConnectionBuilder::session()?
-            .name(&name)?
-            .serve_at(path.to_owned(), state)?
-            .build()
-            .await?;
-        self.watched_states.insert(
+                let (tx, rx) = oneshot::channel();
+                if let Ok(config) = conn
+                    .object_server()
+                    .interface::<_, Config>(path_clone.to_owned())
+                    .await
+                {
+                    let mut mut_config = config.get_mut().await;
+                    mut_config.set_tx(tx);
+                    drop(mut_config);
+                    if let Err(err) = Config::ping(config.signal_context()).await {
+                        eprintln!("Failed to send ping: {}", err);
+                        continue;
+                    }
+                } else {
+                    break;
+                };
+
+                if tokio::time::timeout(std::time::Duration::from_secs(60), rx)
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            configs_clone.write().await.remove(&(id_clone, version));
+        });
+        configs.write().await.insert(
             (id.to_owned(), version),
             (conn, path.to_owned(), name.to_owned()),
         );
@@ -418,8 +496,8 @@ async fn main() -> zbus::Result<()> {
             let settings_daemon = SettingsDaemon {
                 logind_session: logind_session.ok(),
                 display_brightness_device,
-                watched_configs: HashMap::new(),
-                watched_states: HashMap::new(),
+                watched_configs: Arc::new(RwLock::new(HashMap::new())),
+                watched_states: Arc::new(RwLock::new(HashMap::new())),
             };
 
             let connection = zbus::ConnectionBuilder::session()?
@@ -446,9 +524,8 @@ async fn main() -> zbus::Result<()> {
                     let settings_daemon = settings_daemon.get().await;
                     for c in changes {
                         if let Change::Config(id, key, version) = c {
-                            let Some((conn, path, _)) = settings_daemon
-                                .watched_configs
-                                .get(&(id.to_string(), version))
+                            let read_guard = settings_daemon.watched_configs.read().await;
+                            let Some((conn, path, _)) = read_guard.get(&(id.to_string(), version))
                             else {
                                 continue;
                             };
@@ -468,9 +545,8 @@ async fn main() -> zbus::Result<()> {
                                 eprintln!("Failed to send config changed signal: {}", err);
                             }
                         } else if let Change::State(id, key, version) = c {
-                            let Some((conn, path, _)) = settings_daemon
-                                .watched_states
-                                .get(&(id.to_string(), version))
+                            let read_guard = settings_daemon.watched_states.read().await;
+                            let Some((conn, path, _)) = read_guard.get(&(id.to_string(), version))
                             else {
                                 continue;
                             };
