@@ -40,6 +40,23 @@ impl Config {
     ) -> zbus::Result<()>;
 }
 
+impl Config {
+    fn path(id: &str) -> ObjectPath<'static> {
+        // convert id to path
+        let id = id.replace('.', "/");
+
+        ObjectPath::try_from(format!("/com/system76/CosmicSettingsDaemon/Config/{}", id))
+            .unwrap_or_else(|_| {
+                let mut rng = rand::thread_rng();
+                ObjectPath::try_from(format!(
+                    "/com/system76/CosmicSettingsDaemon/Config/{}",
+                    rng.gen::<u128>()
+                ))
+                .unwrap()
+            })
+    }
+}
+
 struct State;
 
 #[zbus::dbus_interface(name = "org.system76.CosmicSettingsDaemon.State")]
@@ -53,20 +70,21 @@ impl State {
     ) -> zbus::Result<()>;
 }
 
-fn path(id: &str) -> ObjectPath<'static> {
-    // convert id to path
-    let id = id.replace('.', "/");
+impl State {
+    fn path(id: &str) -> ObjectPath<'static> {
+        // convert id to path
+        let id = id.replace('.', "/");
 
-    ObjectPath::try_from(format!("/com/system76/CosmicSettingsDaemon/State/{}", id)).unwrap_or_else(
-        |_| {
-            let mut rng = rand::thread_rng();
-            ObjectPath::try_from(format!(
-                "/com/system76/CosmicSettingsDaemon/State/{}",
-                rng.gen::<u128>()
-            ))
-            .unwrap()
-        },
-    )
+        ObjectPath::try_from(format!("/com/system76/CosmicSettingsDaemon/State/{}", id))
+            .unwrap_or_else(|_| {
+                let mut rng = rand::thread_rng();
+                ObjectPath::try_from(format!(
+                    "/com/system76/CosmicSettingsDaemon/State/{}",
+                    rng.gen::<u128>()
+                ))
+                .unwrap()
+            })
+    }
 }
 
 #[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon")]
@@ -141,7 +159,7 @@ impl SettingsDaemon {
         if let Some((_, path)) = self.watched_configs.get(id) {
             return Ok(path.to_owned());
         }
-        let path = path(id);
+        let path = Config::path(id);
         let name = format!("org.system76.CosmicSettingsDaemon.Config.{}", id);
         let conn = zbus::ConnectionBuilder::session()?
             .name(name)?
@@ -160,7 +178,7 @@ impl SettingsDaemon {
         if let Some((_, path)) = self.watched_states.get(id) {
             return Ok(path.to_owned());
         }
-        let path = path(id);
+        let path = State::path(id);
         let name = format!("org.system76.CosmicSettingsDaemon.State.{}", id);
         let conn = zbus::ConnectionBuilder::session()?
             .name(name)?
