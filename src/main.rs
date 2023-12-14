@@ -32,91 +32,65 @@ struct SettingsDaemon {
 }
 
 #[derive(Debug)]
-struct Config;
+enum Config {
+    Config,
+    State,
+}
 
 #[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon.Config")]
 impl Config {
     #[dbus_interface(signal)]
-    async fn config_changed(ctxt: &SignalContext<'_>, id: String, key: String) -> zbus::Result<()>;
+    async fn changed(ctxt: &SignalContext<'_>, id: String, key: String) -> zbus::Result<()>;
+
+    /// Requests the client to call the pong method
+    /// If the client does not call pong within 1 minute, the client is considered dead
+    /// and the config is removed   
+    #[dbus_interface(signal)]
+    async fn ping(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
+
+    /// Acknowledges the ping request
+    async fn pong(&self) -> zbus::fdo::Result<()> {
+        Ok(())
+    }
 }
 
 impl Config {
-    fn path(id: &str, version: u64) -> ObjectPath<'static> {
+    fn path(&self, id: &str, version: u64) -> ObjectPath<'static> {
+        let cfg_type = if matches!(self, Config::State) {
+            "State"
+        } else {
+            "Config"
+        };
         // convert id to path
         let id = id.replace('.', "/");
 
         ObjectPath::try_from(format!(
-            "/com/system76/CosmicSettingsDaemon/Config/{}/V{}",
-            id, version
+            "/com/system76/CosmicSettingsDaemon/{cfg_type}/{id}/V{version}",
         ))
         .unwrap_or_else(|_| {
             let next_id = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
             ObjectPath::try_from(format!(
-                "/com/system76/CosmicSettingsDaemon/Config/C{}/V{}",
-                next_id, version
+                "/com/system76/CosmicSettingsDaemon/{cfg_type}/C{next_id}/V{version}",
             ))
             .unwrap()
         })
     }
 
-    fn name(id: &str, version: u64) -> WellKnownName<'static> {
+    fn name(&self, id: &str, version: u64) -> WellKnownName<'static> {
+        let cfg_type = if matches!(self, Config::State) {
+            "State"
+        } else {
+            "Config"
+        };
         if let Ok(name) = WellKnownName::try_from(format!(
-            "com.system76.CosmicSettingsDaemon.Config.{}.V{}",
-            id, version
+            "com.system76.CosmicSettingsDaemon.{cfg_type}.{id}.V{version}",
         )) {
             name
         } else {
             let next_id = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
             WellKnownName::try_from(format!(
-                "com.system76.CosmicSettingsDaemon.Config.C{}.V{}",
-                next_id, version
-            ))
-            .unwrap()
-        }
-    }
-}
-
-#[derive(Debug)]
-struct State;
-
-#[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon.State")]
-impl State {
-    #[dbus_interface(signal)]
-    async fn state_changed(ctxt: &SignalContext<'_>, id: String, key: String) -> zbus::Result<()>;
-}
-
-impl State {
-    fn path(id: &str, version: u64) -> ObjectPath<'static> {
-        // convert id to path
-        let id = id.replace('.', "/");
-
-        ObjectPath::try_from(format!(
-            "/com/system76/CosmicSettingsDaemon/State/{}/V{}",
-            id, version
-        ))
-        .unwrap_or_else(|_| {
-            let next_id = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-
-            ObjectPath::try_from(format!(
-                "/com/system76/CosmicSettingsDaemon/State/S{}/V{}",
-                next_id, version
-            ))
-            .unwrap()
-        })
-    }
-
-    fn name(id: &str, version: u64) -> WellKnownName<'static> {
-        if let Ok(name) = WellKnownName::try_from(format!(
-            "com.system76.CosmicSettingsDaemon.State.{}.V{}",
-            id, version
-        )) {
-            name
-        } else {
-            let next_id = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-            WellKnownName::try_from(format!(
-                "com.system76.CosmicSettingsDaemon.State.S{}.V{}",
-                next_id, version
+                "com.system76.CosmicSettingsDaemon.{cfg_type}.C{next_id}.V{version}",
             ))
             .unwrap()
         }
@@ -194,13 +168,13 @@ impl SettingsDaemon {
         version: u64,
     ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
         // create a new config, return the path and add it to our hashmap
-        let config = Config;
+        let config = Config::Config;
 
         if let Some((_, path, name)) = self.watched_configs.get(&(id.to_string(), version)) {
             return Ok((path.to_owned(), name.to_owned()));
         }
-        let path = Config::path(id, version);
-        let name = Config::name(id, version);
+        let path = config.path(id, version);
+        let name = config.name(id, version);
         let conn = zbus::ConnectionBuilder::session()?
             .name(name.as_str())?
             .serve_at(path.to_owned(), config)?
@@ -219,13 +193,13 @@ impl SettingsDaemon {
         version: u64,
     ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
         // create a new state, return the path and add it to our hashmap
-        let state = State;
+        let state = Config::State;
 
         if let Some((_, path, name)) = self.watched_states.get(&(id.to_string(), version)) {
             return Ok((path.to_owned(), name.to_owned()));
         }
-        let path = State::path(id, version);
-        let name = State::name(id, version);
+        let path = state.path(id, version);
+        let name = state.name(id, version);
         let conn = zbus::ConnectionBuilder::session()?
             .name(&name)?
             .serve_at(path.to_owned(), state)?
@@ -334,6 +308,7 @@ async fn backlight_monitor_task(
 pub enum Change {
     Config(String, String, u64),
     State(String, String, u64),
+    Ping(String, u64),
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -483,7 +458,7 @@ async fn main() -> zbus::Result<()> {
                                 continue;
                             };
 
-                            if let Err(err) = Config::config_changed(
+                            if let Err(err) = Config::changed(
                                 config.signal_context(),
                                 id.to_string(),
                                 key.to_string(),
@@ -500,12 +475,12 @@ async fn main() -> zbus::Result<()> {
                                 continue;
                             };
 
-                            let Ok(state) = conn.object_server().interface::<_, State>(path).await
+                            let Ok(state) = conn.object_server().interface::<_, Config>(path).await
                             else {
                                 continue;
                             };
 
-                            if let Err(err) = State::state_changed(
+                            if let Err(err) = Config::changed(
                                 state.signal_context(),
                                 id.to_string(),
                                 key.to_string(),
