@@ -347,7 +347,6 @@ dependencies = [
  "clap",
  "dirs",
  "notify",
- "rand",
  "tokio",
  "udev",
  "zbus",
