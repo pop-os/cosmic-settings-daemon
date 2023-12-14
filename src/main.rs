@@ -1,4 +1,5 @@
 use notify::{event::ModifyKind, EventKind, Watcher};
+use rand::Rng;
 use std::{collections::HashMap, future, io, path::PathBuf};
 use tokio::{
     io::{unix::AsyncFd, Interest},
@@ -9,7 +10,7 @@ mod brightness_device;
 use brightness_device::BrightnessDevice;
 mod logind_session;
 use logind_session::LogindSessionProxy;
-use zbus::SignalContext;
+use zbus::{zvariant::ObjectPath, Connection, SignalContext};
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -22,6 +23,50 @@ static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
     display_brightness_device: Option<BrightnessDevice>,
+    watched_configs: HashMap<String, (Connection, ObjectPath<'static>)>,
+    watched_states: HashMap<String, (Connection, ObjectPath<'static>)>,
+}
+
+struct Config;
+
+#[zbus::dbus_interface(name = "org.system76.CosmicSettingsDaemon.Config")]
+impl Config {
+    #[dbus_interface(signal)]
+    async fn config_changed(
+        ctxt: &SignalContext<'_>,
+        id: String,
+        key: String,
+        version: u64,
+    ) -> zbus::Result<()>;
+}
+
+struct State;
+
+#[zbus::dbus_interface(name = "org.system76.CosmicSettingsDaemon.State")]
+impl State {
+    #[dbus_interface(signal)]
+    async fn state_changed(
+        ctxt: &SignalContext<'_>,
+        id: String,
+        key: String,
+        version: u64,
+    ) -> zbus::Result<()>;
+}
+
+fn path(id: &str) -> ObjectPath<'static> {
+    // convert id to path
+    let id = id.replace('.', "/");
+
+    ObjectPath::try_from(format!("/com/system76/CosmicSettingsDaemon/State/{}", id)).unwrap_or_else(
+        |_| {
+            let mut rng = rand::thread_rng();
+            ObjectPath::try_from(format!(
+                "/com/system76/CosmicSettingsDaemon/State/{}",
+                rng.gen::<u128>()
+            ))
+            .unwrap()
+        },
+    )
 }
 
 #[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon")]
@@ -89,21 +134,43 @@ impl SettingsDaemon {
 
     async fn decrease_keyboard_brightness(&self) {}
 
-    #[dbus_interface(signal)]
-    async fn config_changed(
-        ctxt: &SignalContext<'_>,
-        id: String,
-        key: String,
-        version: u64,
-    ) -> zbus::Result<()>;
+    async fn watch_config(&mut self, id: &str) -> zbus::fdo::Result<ObjectPath<'static>> {
+        // create a new config, return the path and add it to our hashmap
+        let config = Config;
 
-    #[dbus_interface(signal)]
-    async fn state_changed(
-        ctxt: &SignalContext<'_>,
-        id: String,
-        key: String,
-        version: u64,
-    ) -> zbus::Result<()>;
+        if let Some((_, path)) = self.watched_configs.get(id) {
+            return Ok(path.to_owned());
+        }
+        let path = path(id);
+        let name = format!("org.system76.CosmicSettingsDaemon.Config.{}", id);
+        let conn = zbus::ConnectionBuilder::session()?
+            .name(name)?
+            .serve_at(path.to_owned(), config)?
+            .build()
+            .await?;
+        self.watched_configs
+            .insert(id.to_owned(), (conn, path.to_owned()));
+        Ok(path.to_owned())
+    }
+
+    async fn watch_state(&mut self, id: &str) -> zbus::fdo::Result<ObjectPath<'static>> {
+        // create a new state, return the path and add it to our hashmap
+        let state = State;
+
+        if let Some((_, path)) = self.watched_states.get(id) {
+            return Ok(path.to_owned());
+        }
+        let path = path(id);
+        let name = format!("org.system76.CosmicSettingsDaemon.State.{}", id);
+        let conn = zbus::ConnectionBuilder::session()?
+            .name(name)?
+            .serve_at(path.to_owned(), state)?
+            .build()
+            .await?;
+        self.watched_states
+            .insert(id.to_owned(), (conn, path.to_owned()));
+        Ok(path.to_owned())
+    }
 }
 
 fn backlight_enumerate() -> io::Result<Vec<udev::Device>> {
@@ -197,6 +264,7 @@ async fn backlight_monitor_task(
     };
 }
 
+#[derive(Debug)]
 pub enum Change {
     Config(String, String, u64),
     State(String, String, u64),
@@ -232,7 +300,7 @@ async fn main() -> zbus::Result<()> {
                 .or_else(|| dirs::home_dir().map(|p| p.join(".local/state/cosmic")));
             let xdg_config_clone = xdg_config.clone();
             let xdg_state_clone = xdg_state.clone();
-            let (tx, mut rx) = tokio::sync::mpsc::channel(100);
+            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
             let mut watcher =
                 notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
                     if let Ok(event) = res {
@@ -247,6 +315,9 @@ async fn main() -> zbus::Result<()> {
                             .paths
                             .into_iter()
                             .filter_map(|path| {
+                                if !path.is_file() {
+                                    return None;
+                                }
                                 let (path, is_state) = if let Some(path) = xdg_config_clone
                                     .as_ref()
                                     .and_then(|prefix| path.strip_prefix(prefix).ok())
@@ -261,12 +332,11 @@ async fn main() -> zbus::Result<()> {
                                     return None;
                                 };
                                 // really only care about keys
-                                if path.starts_with(".atomicwrite") || !path.is_file() {
+                                if path.starts_with(".atomicwrite") {
                                     return None;
                                 }
 
                                 let key = path.file_name().map(|f| f.to_string_lossy())?;
-
                                 let version = path.parent().and_then(|parent_dir| {
                                     parent_dir
                                         .file_name()
@@ -287,15 +357,13 @@ async fn main() -> zbus::Result<()> {
                                 }
                             })
                             .collect();
-                        let tx = tx.clone();
-                        task::spawn_local(async move {
-                            if let Err(err) = tx.send(msgs).await {
-                                eprintln!("Failed to send config change: {}", err);
-                            }
-                        });
+                        if let Err(err) = tx.send(msgs) {
+                            eprintln!("Failed to send config change: {}", err);
+                        }
                     }
                 })
                 .expect("Failed to create notify watcher");
+
             if let Some(xdg_config) = xdg_config {
                 if let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
                     eprintln!("Failed to watch xdg config dir: {}", err);
@@ -309,6 +377,8 @@ async fn main() -> zbus::Result<()> {
             let settings_daemon = SettingsDaemon {
                 logind_session: logind_session.ok(),
                 display_brightness_device,
+                watched_configs: HashMap::new(),
+                watched_states: HashMap::new(),
             };
 
             let connection = zbus::ConnectionBuilder::session()?
@@ -325,10 +395,24 @@ async fn main() -> zbus::Result<()> {
 
             task::spawn_local(async move {
                 while let Some(changes) = rx.recv().await {
+                    let Ok(settings_daemon) = conn_clone
+                        .object_server()
+                        .interface::<_, SettingsDaemon>(DBUS_PATH)
+                        .await
+                    else {
+                        continue;
+                    };
+                    let settings_daemon = settings_daemon.get().await;
                     for c in changes {
-                        let ctxt = zbus::SignalContext::new(&conn_clone, DBUS_PATH).unwrap();
                         if let Change::Config(id, key, version) = c {
-                            if let Err(err) = SettingsDaemon::config_changed(
+                            let Some((_, path)) = settings_daemon.watched_configs.get(&id) else {
+                                continue;
+                            };
+
+                            let Ok(ctxt) = zbus::SignalContext::new(&conn_clone, path) else {
+                                continue;
+                            };
+                            if let Err(err) = Config::config_changed(
                                 &ctxt,
                                 id.to_string(),
                                 key.to_string(),
@@ -339,7 +423,13 @@ async fn main() -> zbus::Result<()> {
                                 eprintln!("Failed to send config changed signal: {}", err);
                             }
                         } else if let Change::State(id, key, version) = c {
-                            if let Err(err) = SettingsDaemon::state_changed(
+                            let Some((_, path)) = settings_daemon.watched_states.get(&id) else {
+                                continue;
+                            };
+                            let Ok(ctxt) = zbus::SignalContext::new(&conn_clone, path) else {
+                                continue;
+                            };
+                            if let Err(err) = State::state_changed(
                                 &ctxt,
                                 id.to_string(),
                                 key.to_string(),
