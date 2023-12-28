@@ -1,13 +1,13 @@
 use notify::{event::ModifyKind, EventKind, Watcher};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future, io,
     path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
 use tokio::{
     io::{unix::AsyncFd, Interest},
-    sync::{oneshot, RwLock},
+    sync::RwLock,
     task,
 };
 
@@ -16,7 +16,12 @@ use brightness_device::BrightnessDevice;
 mod logind_session;
 use logind_session::LogindSessionProxy;
 use std::sync::atomic::AtomicU64;
-use zbus::{names::WellKnownName, zvariant::ObjectPath, Connection, SignalContext};
+use tokio_stream::StreamExt;
+use zbus::{
+    names::{MemberName, UniqueName, WellKnownName},
+    zvariant::ObjectPath,
+    Connection, MatchRule, MessageStream, SignalContext,
+};
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -41,24 +46,17 @@ struct SettingsDaemon {
 
 #[derive(Debug)]
 enum Config {
-    Config(Option<oneshot::Sender<()>>),
-    State(Option<oneshot::Sender<()>>),
+    Config,
+    State,
 }
 
 impl Config {
     fn new_config() -> Self {
-        Self::Config(None)
+        Self::Config
     }
 
     fn new_state() -> Self {
-        Self::State(None)
-    }
-
-    fn set_tx(&mut self, tx: oneshot::Sender<()>) {
-        match self {
-            Self::Config(ref mut tx_opt) => *tx_opt = Some(tx),
-            Self::State(ref mut tx_opt) => *tx_opt = Some(tx),
-        }
+        Self::State
     }
 }
 
@@ -66,34 +64,11 @@ impl Config {
 impl Config {
     #[dbus_interface(signal)]
     async fn changed(ctxt: &SignalContext<'_>, id: String, key: String) -> zbus::Result<()>;
-
-    /// Requests the client to call the pong method
-    /// If the client does not call pong within 1 minute, the client is considered dead
-    /// and the config is no longer watched
-    #[dbus_interface(signal)]
-    async fn ping(ctxt: &SignalContext<'_>) -> zbus::Result<()>;
-
-    /// Acknowledges the ping request
-    async fn pong(&mut self) -> zbus::fdo::Result<()> {
-        match self {
-            Self::Config(ref mut tx_opt) => {
-                if let Some(tx) = tx_opt.take() {
-                    let _ = tx.send(());
-                }
-            }
-            Self::State(ref mut tx_opt) => {
-                if let Some(tx) = tx_opt.take() {
-                    let _ = tx.send(());
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 impl Config {
     fn path(&self, id: &str, version: u64) -> ObjectPath<'static> {
-        let cfg_type = if matches!(self, Config::State(_)) {
+        let cfg_type = if matches!(self, Config::State) {
             "State"
         } else {
             "Config"
@@ -115,7 +90,7 @@ impl Config {
     }
 
     fn name(&self, id: &str, version: u64) -> WellKnownName<'static> {
-        let cfg_type = if matches!(self, Config::State(_)) {
+        let cfg_type = if matches!(self, Config::State) {
             "State"
         } else {
             "Config"
@@ -225,8 +200,8 @@ impl SettingsDaemon {
         version: u64,
     ) -> zbus::fdo::Result<(ObjectPath<'static>, WellKnownName<'static>)> {
         let configs = match config {
-            Config::Config(_) => &self.watched_configs,
-            Config::State(_) => &self.watched_states,
+            Config::Config => &self.watched_configs,
+            Config::State => &self.watched_states,
         };
         if let Some((_, path, name)) = configs.read().await.get(&(id.to_string(), version)) {
             return Ok((path.to_owned(), name.to_owned()));
@@ -239,50 +214,6 @@ impl SettingsDaemon {
             .build()
             .await?;
 
-        let id_clone = id.to_owned();
-        let path_clone = path.to_owned();
-        let configs_clone = configs.clone();
-        tokio::task::spawn(async move {
-            // wait 10 minutes then send ping and wait for pong or remove
-            // repeat until removed
-            let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 10));
-            loop {
-                interval.tick().await;
-                let read_guard = configs_clone.read().await;
-                let Some(conn) = read_guard
-                    .get(&(id_clone.clone(), version))
-                    .map(|c| c.0.clone())
-                else {
-                    break;
-                };
-                drop(read_guard);
-
-                let (tx, rx) = oneshot::channel();
-                if let Ok(config) = conn
-                    .object_server()
-                    .interface::<_, Config>(path_clone.to_owned())
-                    .await
-                {
-                    let mut mut_config = config.get_mut().await;
-                    mut_config.set_tx(tx);
-                    drop(mut_config);
-                    if let Err(err) = Config::ping(config.signal_context()).await {
-                        eprintln!("Failed to send ping: {}", err);
-                        continue;
-                    }
-                } else {
-                    break;
-                };
-
-                if tokio::time::timeout(std::time::Duration::from_secs(60), rx)
-                    .await
-                    .is_err()
-                {
-                    break;
-                }
-            }
-            configs_clone.write().await.remove(&(id_clone, version));
-        });
         configs.write().await.insert(
             (id.to_owned(), version),
             (conn, path.to_owned(), name.to_owned()),
@@ -493,11 +424,13 @@ async fn main() -> zbus::Result<()> {
                     eprintln!("Failed to watch xdg state dir: {}", err);
                 }
             }
+            let watched_configs = Arc::new(RwLock::new(HashMap::new()));
+            let watched_states = Arc::new(RwLock::new(HashMap::new()));
             let settings_daemon = SettingsDaemon {
                 logind_session: logind_session.ok(),
                 display_brightness_device,
-                watched_configs: Arc::new(RwLock::new(HashMap::new())),
-                watched_states: Arc::new(RwLock::new(HashMap::new())),
+                watched_configs: watched_configs.clone(),
+                watched_states: watched_states.clone(),
             };
 
             let connection = zbus::ConnectionBuilder::session()?
@@ -509,9 +442,19 @@ async fn main() -> zbus::Result<()> {
             let conn_clone = connection.clone();
 
             task::spawn_local(async move {
-                backlight_monitor_task(backlights, connection).await;
+                backlight_monitor_task(backlights, conn_clone).await;
             });
 
+            let conn_clone = connection.clone();
+            task::spawn_local(async move {
+                if let Err(err) =
+                    watch_config_message_stream(conn_clone, watched_configs, watched_states).await
+                {
+                    eprintln!("Failed to watch config message stream: {}", err);
+                }
+            });
+
+            let conn_clone = connection.clone();
             task::spawn_local(async move {
                 while let Some(changes) = rx.recv().await {
                     let Ok(settings_daemon) = conn_clone
@@ -575,4 +518,109 @@ async fn main() -> zbus::Result<()> {
             Ok(())
         })
         .await
+}
+
+async fn watch_config_message_stream(
+    conn: Connection,
+    watched_configs: Arc<
+        RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
+    >,
+    watched_states: Arc<
+        RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
+    >,
+) -> zbus::Result<()> {
+    let config_rule = MatchRule::builder()
+        .msg_type(zbus::MessageType::MethodCall)
+        .member("WatchConfig")?
+        .interface("com.system76.CosmicSettingsDaemon")?
+        .build();
+    let config_stream = MessageStream::for_match_rule(config_rule, &conn, Some(100)).await?;
+
+    let mut watched_config_names: HashMap<(String, u64), HashSet<UniqueName<'static>>> =
+        HashMap::new();
+
+    let state_rule = MatchRule::builder()
+        .msg_type(zbus::MessageType::MethodCall)
+        .member("WatchState")?
+        .interface("com.system76.CosmicSettingsDaemon")?
+        .build();
+    let state_stream = MessageStream::for_match_rule(state_rule, &conn, Some(100)).await?;
+
+    let mut watched_state_names: HashMap<(String, u64), HashSet<UniqueName<'static>>> =
+        HashMap::new();
+
+    let name_changed_rule = MatchRule::builder()
+        .msg_type(zbus::MessageType::Signal)
+        .sender("org.freedesktop.DBus")?
+        .member("NameOwnerChanged")?
+        .interface("org.freedesktop.DBus")?
+        .arg(2, "")? // new owner is empty
+        .build();
+
+    let name_changed_stream =
+        MessageStream::for_match_rule(name_changed_rule, &conn, Some(100)).await?;
+
+    let mut rx = name_changed_stream.merge(config_stream).merge(state_stream);
+
+    while let Some(msg) = rx.try_next().await? {
+        if msg.member() == Some(MemberName::from_static_str_unchecked("NameOwnerChanged")) {
+            let Ok((name, old_owner, _)) = msg.body::<(String, String, String)>() else {
+                continue;
+            };
+            if name != old_owner {
+                continue;
+            }
+            let unique_name = UniqueName::from_str_unchecked(&old_owner).to_owned();
+            for ((k, v), is_config) in watched_config_names
+                .iter_mut()
+                .map(|a| (a, true))
+                .chain(watched_state_names.iter_mut().map(|a| (a, false)))
+                .filter(|((_, v), _)| v.contains(&unique_name))
+            {
+                v.remove(&unique_name);
+                if v.is_empty() {
+                    let mut write_guard = if is_config {
+                        watched_configs.write().await
+                    } else {
+                        watched_states.write().await
+                    };
+                    write_guard.retain(|(id, version), (_, _, _)| &k.0 != id || &k.1 != version);
+                }
+            }
+            watched_config_names.retain(|_, v| !v.is_empty());
+            watched_state_names.retain(|_, v| !v.is_empty());
+        } else if msg.member() == Some(MemberName::from_static_str_unchecked("WatchConfig")) {
+            let Ok(header) = msg.header() else {
+                continue;
+            };
+            let Ok(Some(sender)) = header.sender() else {
+                continue;
+            };
+            let Ok((id, version)) = msg.body::<(String, u64)>() else {
+                continue;
+            };
+
+            let name_set = watched_config_names
+                .entry((id.clone(), version))
+                .or_default();
+            name_set.insert(sender.to_owned());
+        } else if msg.member() == Some(MemberName::from_static_str_unchecked("WatchState")) {
+            let Ok(header) = msg.header() else {
+                continue;
+            };
+            let Ok(Some(sender)) = header.sender() else {
+                continue;
+            };
+            let Ok((id, version)) = msg.body::<(String, u64)>() else {
+                continue;
+            };
+
+            let name_set = watched_state_names
+                .entry((id.clone(), version))
+                .or_default();
+            name_set.insert(sender.to_owned());
+        }
+    }
+
+    Ok(())
 }
