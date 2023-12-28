@@ -11,3 +11,4 @@ notify = "6.1.1"
 tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
 zbus = { version = "3.13.0", default-features = false, features = ["tokio"] }
+tokio-stream = "0.1.14"
