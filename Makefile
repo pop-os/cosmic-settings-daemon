@@ -4,6 +4,7 @@ libdir = $(prefix)/lib
 includedir = $(prefix)/include
 datarootdir = $(prefix)/share
 datadir = $(datarootdir)
+geoclue_agent ?= /usr/libexec/geoclue-2.0/demos/agent
 
 TARGET = debug
 DEBUG ?= 0
@@ -28,7 +29,7 @@ distclean: clean
 	rm -rf .cargo vendor vendor.tar
 
 $(BIN): Cargo.toml Cargo.lock src/main.rs vendor-check
-	cargo build $(ARGS) --bin ${BIN}
+	GEOCLUE_AGENT=${geoclue_agent} cargo build $(ARGS) --bin ${BIN}
 
 install:
 	install -Dm0755 target/$(TARGET)/$(BIN) $(DESTDIR)$(bindir)/$(BIN)

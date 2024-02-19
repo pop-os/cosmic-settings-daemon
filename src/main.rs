@@ -32,6 +32,7 @@ mod theme;
 // Scale brightness to 0 to 100? Or something else? Float?
 
 pub static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
+const GEOCLUE_AGENT: Option<&'static str> = option_env!("GEOCLUE_AGENT");
 
 static DBUS_NAME: &str = "com.system76.CosmicSettingsDaemon";
 static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
@@ -325,9 +326,8 @@ pub enum Change {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> zbus::Result<()> {
-    // TODO configurable path for the agent
-    // or move to cosmic-session?
-    std::process::Command::new("/usr/libexec/geoclue-2.0/demos/agent").spawn()?;
+    std::process::Command::new(GEOCLUE_AGENT.unwrap_or("/usr/libexec/geoclue-2.0/demos/agent"))
+        .spawn()?;
     task::LocalSet::new()
         .run_until(async {
             let backlights = match backlight_enumerate() {
