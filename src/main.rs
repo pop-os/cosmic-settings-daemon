@@ -1,27 +1,30 @@
+use brightness_device::BrightnessDevice;
+use logind_session::LogindSessionProxy;
 use notify::{event::ModifyKind, EventKind, Watcher};
+use std::sync::atomic::AtomicU64;
+use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     future, io,
     path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
+use theme::watch_theme;
 use tokio::{
     io::{unix::AsyncFd, Interest},
     sync::RwLock,
     task,
 };
-
-mod brightness_device;
-use brightness_device::BrightnessDevice;
-mod logind_session;
-use logind_session::LogindSessionProxy;
-use std::sync::atomic::AtomicU64;
 use tokio_stream::StreamExt;
 use zbus::{
     names::{MemberName, UniqueName, WellKnownName},
     zvariant::ObjectPath,
     Connection, MatchRule, MessageStream, SignalContext,
 };
+
+mod brightness_device;
+mod logind_session;
+mod theme;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -322,6 +325,9 @@ pub enum Change {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> zbus::Result<()> {
+    // TODO configurable path for the agent
+    // or move to cosmic-session?
+    std::process::Command::new("/usr/libexec/geoclue-2.0/demos/agent").spawn()?;
     task::LocalSet::new()
         .run_until(async {
             let backlights = match backlight_enumerate() {
@@ -444,7 +450,21 @@ async fn main() -> zbus::Result<()> {
             task::spawn_local(async move {
                 backlight_monitor_task(backlights, conn_clone).await;
             });
+            let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
+            task::spawn_local(async move {
+                let mut sleep = Duration::from_millis(100);
 
+                loop {
+                    if let Err(err) = watch_theme(&mut theme_rx).await {
+                        eprintln!(
+                            "Failed to watch theme {err:?}. Will try again in {}s",
+                            sleep.as_secs()
+                        );
+                    }
+                    tokio::time::sleep(sleep).await;
+                    sleep = sleep.saturating_mul(2);
+                }
+            });
             let conn_clone = connection.clone();
             task::spawn_local(async move {
                 if let Err(err) =
@@ -467,6 +487,11 @@ async fn main() -> zbus::Result<()> {
                     let settings_daemon = settings_daemon.get().await;
                     for c in changes {
                         if let Change::Config(id, key, version) = c {
+                            if id.as_str() == cosmic_theme::THEME_MODE_ID {
+                                if let Err(err) = theme_tx.send(key.clone()).await {
+                                    eprintln!("Failed to send theme mode update {err:?}");
+                                }
+                            }
                             let read_guard = settings_daemon.watched_configs.read().await;
                             let Some((conn, path, _)) = read_guard.get(&(id.to_string(), version))
                             else {
