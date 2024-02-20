@@ -16,6 +16,4 @@ Architecture: amd64 arm64
 Depends:
   ${misc:Depends},
   ${shlibs:Depends}
-Recommends:
-  geoclue-2.0
 Description: Cosmic settings daemon
