@@ -5,16 +5,10 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [dependencies]
-anyhow = "1.0.79"
 clap = "4.2.7"
 dirs = "5.0.1"
 notify = "6.1.1"
 tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
-zbus = { version = "3.15.0", default-features = false, features = ["tokio"] }
+zbus = { version = "3.13.0", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.14"
-sunrise = "1.0.1"
-geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-chrono = "0.4.34"
