@@ -9,7 +9,7 @@ use anyhow::bail;
 use chrono::{DateTime, Datelike, Days, Local};
 use cosmic_config::CosmicConfigEntry;
 use cosmic_theme::ThemeMode;
-use geoclue2::LocationProxy;
+use geoclue2::{Accuracy, LocationProxy};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 
@@ -22,15 +22,32 @@ pub struct SunriseSunset {
     sunset: Instant,
     lat: f64,
     long: f64,
+    /// accuracy in meters
+    accuracy: f64,
 }
 
 impl SunriseSunset {
-    pub fn new(lat: f64, long: f64, now: DateTime<Local>) -> anyhow::Result<Self> {
-        let system_now = SystemTime::from(now);
-        let instant_now = Instant::now();
-        let year = now.year();
-        let month = now.month();
-        let day = now.day();
+    pub fn new(
+        lat: f64,
+        long: f64,
+        t: Option<DateTime<Local>>,
+        accuracy: f64,
+    ) -> anyhow::Result<Self> {
+        let (system_t, instant_t, t) = if let Some(t) = t {
+            let system_t = SystemTime::from(t);
+            let system_now = SystemTime::now();
+            let delta_t = system_t.duration_since(system_now)?;
+            let instant_t = Instant::now()
+                .checked_add(delta_t)
+                .ok_or(anyhow::anyhow!("Could not calculate instant"))?;
+
+            (system_t, instant_t, t)
+        } else {
+            (SystemTime::now(), Instant::now(), Local::now())
+        };
+        let year = t.year();
+        let month = t.month();
+        let day = t.day();
         let (sunrise, sunset) = sunrise::sunrise_sunset(lat, long, year, month, day);
 
         let Some(sunrise) =
@@ -38,6 +55,7 @@ impl SunriseSunset {
         else {
             bail!("Failed to calculate sunrise time");
         };
+
         let Some(sunset) =
             UNIX_EPOCH.checked_add(std::time::Duration::from_secs(u64::try_from(sunset)?))
         else {
@@ -46,22 +64,23 @@ impl SunriseSunset {
 
         let st_to_instant = |now: SystemTime, st: SystemTime| -> anyhow::Result<Instant> {
             Ok(if st > now {
-                instant_now
+                instant_t
                     .checked_add(st.duration_since(now)?)
                     .ok_or(anyhow::anyhow!("Failed to convert system time to instant"))?
             } else {
-                instant_now
+                instant_t
                     .checked_sub(now.duration_since(st)?)
                     .ok_or(anyhow::anyhow!("Failed to convert system time to instant"))?
             })
         };
 
         Ok(Self {
-            last_update: now,
-            sunrise: st_to_instant(system_now, sunrise)?,
-            sunset: st_to_instant(system_now, sunset)?,
+            last_update: t,
+            sunrise: st_to_instant(system_t, sunrise)?,
+            sunset: st_to_instant(system_t, sunset)?,
             lat,
             long,
+            accuracy,
         })
     }
 
@@ -92,7 +111,7 @@ impl SunriseSunset {
                 let Some(tomorrow) = self.last_update.checked_add_days(Days::new(1)) else {
                     bail!("Failed to calculate next date for theme auto-switch.");
                 };
-                *self = Self::new(self.lat, self.long, tomorrow)?;
+                *self = Self::new(self.lat, self.long, Some(tomorrow), self.accuracy)?;
                 self.next()
             }
         }
@@ -116,6 +135,9 @@ pub async fn watch_theme(
     let conn = zbus::Connection::system().await?;
     let mgr = geoclue2::ManagerProxy::new(&conn).await?;
     let client = mgr.get_client().await?;
+    client
+        .set_requested_accuracy_level(Accuracy::Exact as u32)
+        .await?;
     client.set_desktop_id(DBUS_NAME).await?;
     // TODO allow preference for config file instead?
     let mut location_updates = Some(client.receive_location_updated().await?);
@@ -123,11 +145,12 @@ pub async fn watch_theme(
 
     let mut sunrise_sunset: Option<SunriseSunset> = None;
     loop {
-        let sunset_deadline = if let Some(s) = sunrise_sunset.as_mut() {
-            Some(s.update_next()?)
-        } else {
-            None
-        };
+        let sunset_deadline =
+            if let Some(Some(s)) = theme_mode.auto_switch.then(|| sunrise_sunset.as_mut()) {
+                Some(s.update_next()?)
+            } else {
+                None
+            };
 
         let location_update = async {
             if let Some(location_updates) = location_updates.as_mut() {
@@ -161,7 +184,7 @@ pub async fn watch_theme(
                 }
 
                 // need to set the theme right away
-                if !theme_mode.auto_switch && auto_switch_prev {
+                if theme_mode.auto_switch && !auto_switch_prev {
                     let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
                         continue;
                     };
@@ -195,19 +218,34 @@ pub async fn watch_theme(
                     .path(args.new())?
                     .build()
                     .await?;
+                let accuracy = new.accuracy().await?;
+
+                // XXX sometimes location updates seem to be extremely inaccurate
+                // Probably they are updates with the approximate location of the country?
+                if let Some(s) = sunrise_sunset.as_ref() {
+                    if s.accuracy * 10.0 < accuracy {
+                        continue;
+                    }
+                }
+
                 let latitude = new.latitude().await?;
                 let longitude = new.longitude().await?;
-
-                match SunriseSunset::new(latitude, longitude, Local::now()) {
+                match SunriseSunset::new(latitude, longitude, None, accuracy) {
                     Ok(s) => {
                         sunrise_sunset = Some(s);
                     },
                     Err(err) => {
                         eprintln!("Failed to calculate sunrise and sunset for current location {err:?}");
+                        sunrise_sunset = None;
+                        continue;
                     },
                 };
 
-                let Some(is_dark) =  sunrise_sunset.as_ref().unwrap().is_dark().ok() else {
+                if !theme_mode.auto_switch {
+                    continue;
+                }
+
+                let Some(is_dark) = sunrise_sunset.as_ref().unwrap().is_dark().ok() else {
                     continue;
                 };
 
