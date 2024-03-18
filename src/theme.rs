@@ -7,8 +7,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::bail;
 use chrono::{DateTime, Datelike, Days, Local};
+use cosmic::{config::CosmicTk, theme::CosmicTheme};
 use cosmic_config::CosmicConfigEntry;
-use cosmic_theme::ThemeMode;
+use cosmic_theme::{Theme, ThemeMode};
 use geoclue2::{Accuracy, LocationProxy};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
@@ -24,6 +25,13 @@ pub struct SunriseSunset {
     long: f64,
     /// accuracy in meters
     accuracy: f64,
+}
+
+pub enum ThemeMsg {
+    ThemeMode(String),
+    /// true if dark
+    Theme(bool),
+    Tk(String),
 }
 
 impl SunriseSunset {
@@ -119,7 +127,7 @@ impl SunriseSunset {
 }
 
 pub async fn watch_theme(
-    theme_mode_rx: &mut tokio::sync::mpsc::Receiver<String>,
+    theme_mode_rx: &mut tokio::sync::mpsc::Receiver<ThemeMsg>,
 ) -> anyhow::Result<()> {
     let helper = ThemeMode::config()?;
     let mut theme_mode = match ThemeMode::get_entry(&helper) {
@@ -131,6 +139,20 @@ pub async fn watch_theme(
             t
         }
     };
+
+    let tk_helper = CosmicTk::config()?;
+    let mut tk = match CosmicTk::get_entry(&tk_helper) {
+        Ok(t) => t,
+        Err((errs, t)) => {
+            for why in errs {
+                eprintln!("{why}");
+            }
+            t
+        }
+    };
+
+    let light_helper = CosmicTheme::light_config()?;
+    let dark_helper = CosmicTheme::dark_config()?;
 
     let conn = zbus::Connection::system().await?;
     let mgr = geoclue2::ManagerProxy::new(&conn).await?;
@@ -172,27 +194,79 @@ pub async fn watch_theme(
 
         tokio::select! {
             changes = theme_mode_rx.recv() => {
+
                 let Some(changes) = changes else {
                     bail!("Theme mode changes failed");
                 };
 
-                let auto_switch_prev = theme_mode.auto_switch;
-                let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
+                match changes {
+                    ThemeMsg::ThemeMode(changes) => {
+                        let auto_switch_prev = theme_mode.auto_switch;
+                        let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
 
-                for err in errs {
-                    eprintln!("Error updating the theme mode {err:?}");
-                }
+                        for err in errs {
+                            eprintln!("Error updating the theme mode {err:?}");
+                        }
 
-                // need to set the theme right away
-                if theme_mode.auto_switch && !auto_switch_prev {
-                    let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
-                        continue;
-                    };
+                        // need to set the theme right away
+                        if theme_mode.auto_switch && !auto_switch_prev {
+                            let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
+                                continue;
+                            };
 
-                    if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
-                        eprintln!("Failed to update theme mode {err:?}");
+                            if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
+                                eprintln!("Failed to update theme mode {err:?}");
+                            }
+                        }
+                        if tk.apply_theme_global {
+
+                            if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
+                                eprintln!("Failed to apply the theme to gtk. {err:?}");
+                            }
+                        }
+                    },
+                    ThemeMsg::Tk(changes) => {
+                        let (errs, changes) = tk.update_keys(&tk_helper, &[changes]);
+
+                        for err in errs {
+                            eprintln!("Error updating the theme toolkit config {err:?}");
+                        }
+
+                        if !changes.contains(&"apply_theme_global") {
+                            continue;
+                        }
+
+                        if tk.apply_theme_global {
+                            if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
+                                eprintln!("Failed to apply the theme to gtk. {err:?}");
+                            }
+                        } else {
+                            if let Err(err) = Theme::reset_gtk() {
+                                eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
+                            }
+                        }
+                    },
+                    ThemeMsg::Theme(is_dark) => {
+                        let t = match Theme::get_entry(if is_dark {
+                                &dark_helper
+                            } else {
+                                &light_helper
+                            }) {
+                                Ok(t) => t,
+                                Err((errs, t)) => {
+                                    for err in errs {
+                                        eprintln!("Failed to load the theme. {err:?}");
+                                    }
+                                    t
+                                },
+                            };
+                            if let Err(err) = t.write_gtk4() {
+                                eprintln!("Failed to write gtk4 css. {err:?}");
+                            }
                     }
                 }
+
+
             }
             _ = sleep => {
                 if !theme_mode.auto_switch {
@@ -205,6 +279,11 @@ pub async fn watch_theme(
 
                 if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
                     eprintln!("Failed to update theme mode {err:?}");
+                }
+                if tk.apply_theme_global {
+                    if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
+                        eprintln!("Failed to apply the theme to gtk. {err:?}");
+                    }
                 }
             }
             location_update = location_update => {
@@ -251,6 +330,11 @@ pub async fn watch_theme(
 
                 if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
                     eprintln!("Failed to update theme mode {err:?}");
+                }
+                if tk.apply_theme_global {
+                    if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
+                        eprintln!("Failed to apply the theme to gtk. {err:?}");
+                    }
                 }
             }
 
