@@ -15,6 +15,16 @@ zbus = { version = "3.15.0", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.14"
 sunrise = "1.0.1"
 geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = ["gtk4-output"]}
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-chrono = "0.4.34"
+chrono = "0.4.35"
+libcosmic = { git = "https://github.com/pop-os/libcosmic" }
+
+# For development and testing purposes
+[patch.'https://github.com/pop-os/libcosmic']
+libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-export-gtk" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-export-gtk" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-export-gtk" }
+# libcosmic = { path = "../libcosmic" }
+# cosmic-config = { path = "../libcosmic/cosmic-config" }
+# cosmic-theme = { path = "../libcosmic/cosmic-theme" }

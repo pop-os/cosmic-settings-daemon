@@ -488,8 +488,26 @@ async fn main() -> zbus::Result<()> {
                     for c in changes {
                         if let Change::Config(id, key, version) = c {
                             if id.as_str() == cosmic_theme::THEME_MODE_ID {
-                                if let Err(err) = theme_tx.send(key.clone()).await {
+                                if let Err(err) =
+                                    theme_tx.send(theme::ThemeMsg::ThemeMode(key.clone())).await
+                                {
                                     eprintln!("Failed to send theme mode update {err:?}");
+                                }
+                            } else if id.as_str() == cosmic::config::toolkit::ID {
+                                if let Err(err) =
+                                    theme_tx.send(theme::ThemeMsg::Tk(key.clone())).await
+                                {
+                                    eprintln!("Failed to send theme toolkit update {err:?}");
+                                }
+                            } else if id.as_str() == cosmic_theme::DARK_THEME_ID {
+                                if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(true)).await
+                                {
+                                    eprintln!("Failed to send dark theme update {err:?}");
+                                }
+                            } else if id.as_str() == cosmic_theme::LIGHT_THEME_ID {
+                                if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(true)).await
+                                {
+                                    eprintln!("Failed to send dark theme update {err:?}");
                                 }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;
