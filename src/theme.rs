@@ -237,6 +237,11 @@ pub async fn watch_theme(
                         }
 
                         if tk.apply_theme_global {
+                            let _ = std::process::Command::new("flatpak")
+                                .arg("override")
+                                .arg("--user")
+                                .arg("--filesystem=xdg-config/gtk-4.0:ro")
+                                .spawn();
                             if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
                                 eprintln!("Failed to apply the theme to gtk. {err:?}");
                             }
