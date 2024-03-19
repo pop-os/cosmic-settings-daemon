@@ -505,7 +505,7 @@ async fn main() -> zbus::Result<()> {
                                     eprintln!("Failed to send dark theme update {err:?}");
                                 }
                             } else if id.as_str() == cosmic_theme::LIGHT_THEME_ID {
-                                if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(true)).await
+                                if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(false)).await
                                 {
                                     eprintln!("Failed to send dark theme update {err:?}");
                                 }
