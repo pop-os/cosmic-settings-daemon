@@ -154,6 +154,41 @@ pub async fn watch_theme(
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
 
+    if tk.apply_theme_global {
+        // Write the gtk variables for both themes in case they have changed in the meantime
+        let dark = match Theme::get_entry(&dark_helper) {
+            Ok(t) => t,
+            Err((errs, t)) => {
+                for why in errs {
+                    eprintln!("{why}");
+                }
+                t
+            }
+        };
+        _ = dark.write_gtk4();
+        let light = match Theme::get_entry(&light_helper) {
+            Ok(t) => t,
+            Err((errs, t)) => {
+                for why in errs {
+                    eprintln!("{why}");
+                }
+                t
+            }
+        };
+        _ = light.write_gtk4();
+        _ = std::process::Command::new("flatpak")
+            .arg("override")
+            .arg("--user")
+            .arg("--filesystem=xdg-config/gtk-4.0:ro")
+            .spawn();
+        if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
+            eprintln!("Failed to apply the theme to gtk. {err:?}");
+        }
+    } else {
+        if let Err(err) = Theme::reset_gtk() {
+            eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
+        }
+    }
     let conn = zbus::Connection::system().await?;
     let mgr = geoclue2::ManagerProxy::new(&conn).await?;
     let client = mgr.get_client().await?;
@@ -237,6 +272,27 @@ pub async fn watch_theme(
                         }
 
                         if tk.apply_theme_global {
+                            // Write the gtk variables for both themes in case they have changed in the meantime
+                            let dark = match Theme::get_entry(&dark_helper) {
+                                Ok(t) => t,
+                                Err((errs, t)) => {
+                                    for why in errs {
+                                        eprintln!("{why}");
+                                    }
+                                    t
+                                }
+                            };
+                            _ = dark.write_gtk4();
+                            let light = match Theme::get_entry(&light_helper) {
+                                Ok(t) => t,
+                                Err((errs, t)) => {
+                                    for why in errs {
+                                        eprintln!("{why}");
+                                    }
+                                    t
+                                }
+                            };
+                            _ = light.write_gtk4();
                             let _ = std::process::Command::new("flatpak")
                                 .arg("override")
                                 .arg("--user")
@@ -265,8 +321,10 @@ pub async fn watch_theme(
                                     t
                                 },
                             };
-                            if let Err(err) = t.write_gtk4() {
-                                eprintln!("Failed to write gtk4 css. {err:?}");
+                            if tk.apply_theme_global {
+                                if let Err(err) = t.write_gtk4() {
+                                    eprintln!("Failed to write gtk4 css. {err:?}");
+                                }
                             }
                     }
                 }
