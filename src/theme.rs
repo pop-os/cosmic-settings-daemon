@@ -272,6 +272,10 @@ pub async fn watch_theme(
                             eprintln!("Error updating the theme toolkit config {err:?}");
                         }
 
+                        if changes.contains(&"icon_theme") {
+                            set_gnome_icon_theme(tk.icon_theme.clone());
+                        }
+
                         if changes.contains(&"show_maximize") || changes.contains(&"show_minimize") {
                             set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
                         }
@@ -474,4 +478,18 @@ fn set_gnome_desktop_interface(is_dark: bool) {
                 .await;
         });
     }
+}
+
+fn set_gnome_icon_theme(theme: String) {
+    tokio::spawn(async move {
+        let _res = tokio::process::Command::new("gsettings")
+            .args(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "icon-theme",
+                theme.as_str(),
+            ])
+            .status()
+            .await;
+    });
 }
