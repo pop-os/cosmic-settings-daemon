@@ -272,6 +272,10 @@ pub async fn watch_theme(
                             eprintln!("Error updating the theme toolkit config {err:?}");
                         }
 
+                        if changes.contains(&"show_maximize") || changes.contains(&"show_minimize") {
+                            set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
+                        }
+
                         if !changes.contains(&"apply_theme_global") {
                             continue;
                         }
@@ -353,11 +357,11 @@ pub async fn watch_theme(
                     eprintln!("Failed to update theme mode {err:?}");
                 }
                 if tk.apply_theme_global {
-                    set_gnome_desktop_interface(theme_mode.is_dark);
-
                     if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
                         eprintln!("Failed to apply the theme to gtk. {err:?}");
                     }
+
+                    set_gnome_desktop_interface(theme_mode.is_dark);
                 }
             }
             location_update = location_update => {
@@ -416,6 +420,27 @@ pub async fn watch_theme(
 
         }
     }
+}
+
+fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {
+    tokio::spawn(async move {
+        let layout = match (show_maximize, show_minimize) {
+            (true, true) => ":minimize,maximize,close",
+            (true, false) => ":maximize,close",
+            (false, true) => ":minimize,close",
+            (false, false) => ":close",
+        };
+
+        let _res = tokio::process::Command::new("gsettings")
+            .args(&[
+                "set",
+                "org.gnome.desktop.wm.preferences",
+                "button-layout",
+                layout,
+            ])
+            .status()
+            .await;
+    });
 }
 
 fn set_gnome_desktop_interface(is_dark: bool) {
