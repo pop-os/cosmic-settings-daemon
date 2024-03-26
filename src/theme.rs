@@ -3,6 +3,7 @@
 // when the theme is set to auto-export color palette, write to gtk3 / gtk4 / kde / ... css files
 // read config file for lat/long
 
+use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::bail;
@@ -11,6 +12,7 @@ use cosmic::{config::CosmicTk, theme::CosmicTheme};
 use cosmic_config::CosmicConfigEntry;
 use cosmic_theme::{Theme, ThemeMode};
 use geoclue2::{Accuracy, LocationProxy};
+
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 
@@ -184,6 +186,8 @@ pub async fn watch_theme(
         if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
             eprintln!("Failed to apply the theme to gtk. {err:?}");
         }
+
+        set_gnome_desktop_interface(theme_mode.is_dark);
     } else {
         if let Err(err) = Theme::reset_gtk() {
             eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
@@ -254,10 +258,11 @@ pub async fn watch_theme(
                             }
                         }
                         if tk.apply_theme_global {
-
                             if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
                                 eprintln!("Failed to apply the theme to gtk. {err:?}");
                             }
+
+                            set_gnome_desktop_interface(theme_mode.is_dark);
                         }
                     },
                     ThemeMsg::Tk(changes) => {
@@ -301,6 +306,8 @@ pub async fn watch_theme(
                             if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
                                 eprintln!("Failed to apply the theme to gtk. {err:?}");
                             }
+
+                            set_gnome_desktop_interface(theme_mode.is_dark);
                         } else {
                             if let Err(err) = Theme::reset_gtk() {
                                 eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
@@ -325,6 +332,8 @@ pub async fn watch_theme(
                                 if let Err(err) = t.write_gtk4() {
                                     eprintln!("Failed to write gtk4 css. {err:?}");
                                 }
+
+                                set_gnome_desktop_interface(theme_mode.is_dark);
                             }
                     }
                 }
@@ -344,6 +353,8 @@ pub async fn watch_theme(
                     eprintln!("Failed to update theme mode {err:?}");
                 }
                 if tk.apply_theme_global {
+                    set_gnome_desktop_interface(theme_mode.is_dark);
+
                     if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
                         eprintln!("Failed to apply the theme to gtk. {err:?}");
                     }
@@ -398,9 +409,44 @@ pub async fn watch_theme(
                     if let Err(err) = Theme::apply_gtk(theme_mode.is_dark) {
                         eprintln!("Failed to apply the theme to gtk. {err:?}");
                     }
+
+                    set_gnome_desktop_interface(theme_mode.is_dark);
                 }
             }
 
         }
+    }
+}
+
+fn set_gnome_desktop_interface(is_dark: bool) {
+    let (color_scheme, adw_theme, adw_theme_path) = if is_dark {
+        (
+            "prefer-dark",
+            "adw-gtk3-dark",
+            "/usr/share/themes/adw-gtk3-dark",
+        )
+    } else {
+        ("prefer-light", "adw-gtk3", "/usr/share/themes/adw-gtk3")
+    };
+
+    tokio::spawn(async {
+        let _res = tokio::process::Command::new("gsettings")
+            .args(&[
+                "set",
+                "org.gnome.desktop.interface",
+                "color-scheme",
+                color_scheme,
+            ])
+            .status()
+            .await;
+    });
+
+    if Path::new(adw_theme_path).exists() {
+        tokio::spawn(async {
+            let _res = tokio::process::Command::new("gsettings")
+                .args(&["set", "org.gnome.desktop.interface", "gtk-theme", adw_theme])
+                .status()
+                .await;
+        });
     }
 }
