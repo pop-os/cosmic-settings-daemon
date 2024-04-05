@@ -14,6 +14,7 @@ Homepage: https://github.com/pop-os/cosmic-settings-daemon
 Package: cosmic-settings-daemon
 Architecture: amd64 arm64
 Depends:
+  acpid,
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
