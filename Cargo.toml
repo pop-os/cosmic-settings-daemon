@@ -11,7 +11,7 @@ dirs = "5.0.1"
 notify = "6.1.1"
 tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
-zbus = { version = "3.15.0", default-features = false, features = ["tokio"] }
+zbus = { version = "=3.15.2", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.14"
 sunrise = "1.0.1"
 geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
@@ -19,6 +19,11 @@ cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = ["gtk4-
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 chrono = "0.4.35"
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
+acpid_plug = "0.1.2"
+upower_dbus = "0.3.2"
+notify-rust = "4.9.0"
+walkdir = "2.5.0"
+memoize = "0.4.2"
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']

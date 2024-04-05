@@ -21,9 +21,10 @@ use zbus::{
     zvariant::ObjectPath,
     Connection, MatchRule, MessageStream, SignalContext,
 };
-
+mod battery;
 mod brightness_device;
 mod logind_session;
+mod pipewire;
 mod theme;
 
 // Use seperate HasDisplayBrightness, or -1?
@@ -446,10 +447,12 @@ async fn main() -> zbus::Result<()> {
                 .await?;
 
             let conn_clone = connection.clone();
-
             task::spawn_local(async move {
                 backlight_monitor_task(backlights, conn_clone).await;
             });
+
+            tokio::task::spawn_local(battery::monitor());
+
             let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
             task::spawn_local(async move {
                 let mut sleep = Duration::from_millis(100);
@@ -465,6 +468,7 @@ async fn main() -> zbus::Result<()> {
                     sleep = sleep.saturating_mul(2);
                 }
             });
+
             let conn_clone = connection.clone();
             task::spawn_local(async move {
                 if let Err(err) =
