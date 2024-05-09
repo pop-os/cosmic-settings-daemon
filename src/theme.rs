@@ -131,6 +131,8 @@ impl SunriseSunset {
 pub async fn watch_theme(
     theme_mode_rx: &mut tokio::sync::mpsc::Receiver<ThemeMsg>,
 ) -> anyhow::Result<()> {
+    let mut override_until_next = false;
+
     let helper = ThemeMode::config()?;
     let mut theme_mode = match ThemeMode::get_entry(&helper) {
         Ok(t) => t,
@@ -240,11 +242,16 @@ pub async fn watch_theme(
 
                 match changes {
                     ThemeMsg::ThemeMode(changes) => {
+                        let is_dark_prev = theme_mode.is_dark;
                         let auto_switch_prev = theme_mode.auto_switch;
                         let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
 
                         for err in errs {
                             eprintln!("Error updating the theme mode {err:?}");
+                        }
+
+                        if is_dark_prev != theme_mode.is_dark && sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark)) {
+                            override_until_next = true;
                         }
 
                         // need to set the theme right away
@@ -349,7 +356,8 @@ pub async fn watch_theme(
 
             }
             _ = sleep => {
-                if !theme_mode.auto_switch {
+                if !theme_mode.auto_switch || override_until_next {
+                    override_until_next = false;
                     continue;
                 }
                 // update the theme mode
@@ -369,6 +377,9 @@ pub async fn watch_theme(
                 }
             }
             location_update = location_update => {
+                if override_until_next {
+                    continue;
+                }
                 // set the next timer
                 // update the theme if necessary
                 let Some(location_update) = location_update else {
