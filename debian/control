@@ -15,6 +15,7 @@ Package: cosmic-settings-daemon
 Architecture: amd64 arm64
 Depends:
   acpid,
+  adw-gtk3,
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
