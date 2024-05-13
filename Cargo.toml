@@ -28,10 +28,10 @@ walkdir = "2.5.0"
 memoize = "0.4.2"
 
 # For development and testing purposes
-[patch.'https://github.com/pop-os/libcosmic']
-libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
+# [patch.'https://github.com/pop-os/libcosmic']
+# libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
+# cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
+# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
 # libcosmic = { path = "../libcosmic" }
 # cosmic-config = { path = "../libcosmic/cosmic-config" }
 # cosmic-theme = { path = "../libcosmic/cosmic-theme" }
