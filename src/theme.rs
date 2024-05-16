@@ -186,7 +186,6 @@ pub async fn watch_theme(
             .arg("--filesystem=xdg-config/gtk-4.0:ro")
             .spawn();
 
-        
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
             if let Err(err) = t.apply_exports() {
@@ -257,6 +256,8 @@ pub async fn watch_theme(
 
                         if is_dark_prev != theme_mode.is_dark && sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark)) {
                             override_until_next = true;
+                        } else {
+                            override_until_next = false;
                         }
 
                         // need to set the theme right away
