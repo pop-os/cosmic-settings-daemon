@@ -130,7 +130,9 @@ impl SunriseSunset {
 
 pub async fn watch_theme(
     theme_mode_rx: &mut tokio::sync::mpsc::Receiver<ThemeMsg>,
+    ready_oneshot: tokio::sync::oneshot::Receiver<()>,
 ) -> anyhow::Result<()> {
+    ready_oneshot.await?;
     let mut override_until_next = false;
 
     let helper = ThemeMode::config()?;

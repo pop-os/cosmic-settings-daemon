@@ -453,12 +453,27 @@ async fn main() -> zbus::Result<()> {
 
             tokio::task::spawn_local(battery::monitor());
 
+            let conn_clone = connection.clone();
+            let (ready_oneshot_tx, mut ready_oneshot_rx) = tokio::sync::oneshot::channel();
+            task::spawn_local(async move {
+                if let Err(err) = watch_config_message_stream(
+                    conn_clone,
+                    watched_configs,
+                    watched_states,
+                    ready_oneshot_tx,
+                )
+                .await
+                {
+                    eprintln!("Failed to watch config message stream: {}", err);
+                }
+            });
+
             let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
             task::spawn_local(async move {
                 let mut sleep = Duration::from_millis(100);
 
                 loop {
-                    if let Err(err) = watch_theme(&mut theme_rx).await {
+                    if let Err(err) = watch_theme(&mut theme_rx, ready_oneshot_rx).await {
                         eprintln!(
                             "Failed to watch theme {err:?}. Will try again in {}s",
                             sleep.as_secs()
@@ -466,15 +481,9 @@ async fn main() -> zbus::Result<()> {
                     }
                     tokio::time::sleep(sleep).await;
                     sleep = sleep.saturating_mul(2);
-                }
-            });
-
-            let conn_clone = connection.clone();
-            task::spawn_local(async move {
-                if let Err(err) =
-                    watch_config_message_stream(conn_clone, watched_configs, watched_states).await
-                {
-                    eprintln!("Failed to watch config message stream: {}", err);
+                    let new = tokio::sync::oneshot::channel();
+                    ready_oneshot_rx = new.1;
+                    _ = new.0.send(());
                 }
             });
 
@@ -575,7 +584,9 @@ async fn watch_config_message_stream(
     watched_states: Arc<
         RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
     >,
+    theme_oneshot_tx: tokio::sync::oneshot::Sender<()>,
 ) -> zbus::Result<()> {
+    let mut theme_oneshot_tx = Some(theme_oneshot_tx);
     let config_rule = MatchRule::builder()
         .msg_type(zbus::MessageType::MethodCall)
         .member("WatchConfig")?
@@ -646,6 +657,11 @@ async fn watch_config_message_stream(
             let Ok((id, version)) = msg.body::<(String, u64)>() else {
                 continue;
             };
+            if let Some(theme_oneshot_tx) = theme_oneshot_tx.take() {
+                if id == cosmic_theme::THEME_MODE_ID {
+                    _ = theme_oneshot_tx.send(());
+                }
+            }
 
             let name_set = watched_config_names
                 .entry((id.clone(), version))
