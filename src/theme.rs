@@ -256,11 +256,12 @@ pub async fn watch_theme(
                             eprintln!("Error updating the theme mode {err:?}");
                         }
 
-                        if is_dark_prev != theme_mode.is_dark && sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark)) {
+                        if sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark)) {
                             override_until_next = true;
                         } else {
                             override_until_next = false;
                         }
+
 
                         // need to set the theme right away
                         if theme_mode.auto_switch && !auto_switch_prev {
