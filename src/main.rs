@@ -65,9 +65,9 @@ impl Config {
     }
 }
 
-#[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon.Config")]
+#[zbus::interface(name = "com.system76.CosmicSettingsDaemon.Config")]
 impl Config {
-    #[dbus_interface(signal)]
+    #[zbus(signal)]
     async fn changed(ctxt: &SignalContext<'_>, id: String, key: String) -> zbus::Result<()>;
 }
 
@@ -114,9 +114,9 @@ impl Config {
     }
 }
 
-#[zbus::dbus_interface(name = "com.system76.CosmicSettingsDaemon")]
+#[zbus::interface(name = "com.system76.CosmicSettingsDaemon")]
 impl SettingsDaemon {
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn display_brightness(&self) -> i32 {
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             // XXX error
@@ -131,7 +131,7 @@ impl SettingsDaemon {
         }
     }
 
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
             if let Some(brightness_device) = self.display_brightness_device.as_ref() {
@@ -142,12 +142,12 @@ impl SettingsDaemon {
         }
     }
 
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn keyboard_brightness(&self) -> i32 {
         -1
     }
 
-    #[dbus_interface(property)]
+    #[zbus(property)]
     async fn set_keyboard_brightness(&self, _value: i32) {}
 
     async fn increase_display_brightness(
@@ -621,8 +621,10 @@ async fn watch_config_message_stream(
     let mut rx = name_changed_stream.merge(config_stream).merge(state_stream);
 
     while let Some(msg) = rx.try_next().await? {
-        if msg.member() == Some(MemberName::from_static_str_unchecked("NameOwnerChanged")) {
-            let Ok((name, old_owner, _)) = msg.body::<(String, String, String)>() else {
+        let header = msg.header();
+        if header.member() == Some(&MemberName::from_static_str_unchecked("NameOwnerChanged")) {
+            let Ok((name, old_owner, _)) = msg.body().deserialize::<(String, String, String)>()
+            else {
                 continue;
             };
             if name != old_owner {
@@ -647,14 +649,12 @@ async fn watch_config_message_stream(
             }
             watched_config_names.retain(|_, v| !v.is_empty());
             watched_state_names.retain(|_, v| !v.is_empty());
-        } else if msg.member() == Some(MemberName::from_static_str_unchecked("WatchConfig")) {
-            let Ok(header) = msg.header() else {
+        } else if header.member() == Some(&MemberName::from_static_str_unchecked("WatchConfig")) {
+            let Some(sender) = header.sender() else {
                 continue;
             };
-            let Ok(Some(sender)) = header.sender() else {
-                continue;
-            };
-            let Ok((id, version)) = msg.body::<(String, u64)>() else {
+
+            let Ok((id, version)) = msg.body().deserialize::<(String, u64)>() else {
                 continue;
             };
             if let Some(theme_oneshot_tx) = theme_oneshot_tx.take() {
@@ -667,14 +667,11 @@ async fn watch_config_message_stream(
                 .entry((id.clone(), version))
                 .or_default();
             name_set.insert(sender.to_owned());
-        } else if msg.member() == Some(MemberName::from_static_str_unchecked("WatchState")) {
-            let Ok(header) = msg.header() else {
+        } else if header.member() == Some(&MemberName::from_static_str_unchecked("WatchState")) {
+            let Some(sender) = header.sender().map(|s| s.to_owned()) else {
                 continue;
             };
-            let Ok(Some(sender)) = header.sender() else {
-                continue;
-            };
-            let Ok((id, version)) = msg.body::<(String, u64)>() else {
+            let Ok((id, version)) = msg.body().deserialize::<(String, u64)>() else {
                 continue;
             };
 
