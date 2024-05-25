@@ -248,7 +248,6 @@ pub async fn watch_theme(
 
                 match changes {
                     ThemeMsg::ThemeMode(changes) => {
-                        let is_dark_prev = theme_mode.is_dark;
                         let auto_switch_prev = theme_mode.auto_switch;
                         let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
 

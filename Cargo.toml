@@ -11,7 +11,7 @@ dirs = "5.0.1"
 notify = "6.1.1"
 tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
-zbus = { version = "=3.15.2", default-features = false, features = ["tokio"] }
+zbus = { version = "4.2", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.14"
 sunrise = "1.0.1"
 geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
@@ -22,16 +22,16 @@ cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 chrono = "0.4.35"
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 acpid_plug = "0.1.2"
-upower_dbus = "0.3.2"
+upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 notify-rust = "4.9.0"
 walkdir = "2.5.0"
 memoize = "0.4.2"
 
 # For development and testing purposes
-# [patch.'https://github.com/pop-os/libcosmic']
-# libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
-# cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
-# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "export-vscode" }
+[patch.'https://github.com/pop-os/libcosmic']
+libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "fix-gtk-rgba" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "fix-gtk-rgba" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "fix-gtk-rgba" }
 # libcosmic = { path = "../libcosmic" }
 # cosmic-config = { path = "../libcosmic/cosmic-config" }
 # cosmic-theme = { path = "../libcosmic/cosmic-theme" }
