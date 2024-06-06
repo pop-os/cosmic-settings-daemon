@@ -1,9 +1,8 @@
-prefix ?= /usr/local
+prefix ?= /usr
 bindir = $(prefix)/bin
 libdir = $(prefix)/lib
 includedir = $(prefix)/include
-datarootdir = $(prefix)/share
-datadir = $(datarootdir)
+sharedir = $(prefix)/share
 geoclue_agent ?= /usr/libexec/geoclue-2.0/demos/agent
 
 TARGET = debug
@@ -19,6 +18,7 @@ ifneq ($(VENDOR),0)
 endif
 
 BIN = cosmic-settings-daemon
+SYSTEM_ACTIONS_CONF = "$(DESTDIR)$(sharedir)/cosmic/com.system76.CosmicSettings.Shortcuts/v1/system_actions"
 
 all: $(BIN)
 
@@ -32,7 +32,8 @@ $(BIN): Cargo.toml Cargo.lock src/main.rs vendor-check
 	GEOCLUE_AGENT=${geoclue_agent} cargo build $(ARGS) --bin ${BIN}
 
 install:
-	install -Dm0755 target/$(TARGET)/$(BIN) $(DESTDIR)$(bindir)/$(BIN)
+	install -Dm0755 "target/$(TARGET)/$(BIN)" "$(DESTDIR)$(bindir)/$(BIN)"
+	install -Dm0644 "data/system_actions.ron" "$(SYSTEM_ACTIONS_CONF)"
 
 ## Cargo Vendoring
 

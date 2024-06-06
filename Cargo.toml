@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 
+[workspace]
+members = ["config"]
+
 [dependencies]
 anyhow = "1.0.79"
 clap = "4.2.7"
