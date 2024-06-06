@@ -1,0 +1,36 @@
+{
+    /// Opens the application library
+    AppLibrary: "cosmic-app-library",
+    /// Decreases screen brightness
+    BrightnessDown: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon DecreaseDisplayBrightness",
+    /// Increases screen brightness
+    BrightnessUp: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon IncreaseDisplayBrightness",
+    /// Opens the home folder in a system default file browser
+    HomeFolder: "xdg-open ~",
+    /// Decreases keyboard brightness
+    // KeyboardBrightnessDown,
+    /// Increases keyboard brightness
+    // KeyboardBrightnessUp,
+    /// Opens the launcher
+    Launcher: "cosmic-launcher",
+    /// Locks the screen
+    LockScreen: "loginctl lock-session",
+    /// Mutes the active output device
+    Mute: "amixer sset Master toggle",
+    /// Mutes the active microphone
+    MuteMic: "amixer sset Capture toggle",
+    /// Takes a screenshot
+    Screenshot: "cosmic-screenshot",
+    /// Opens the system default terminal
+    Terminal: "cosmic-term",
+    /// Lowers the volume of the active output device
+    VolumeLower: "amixer sset Master 5%-",
+    /// Raises the volume of the active output device
+    VolumeRaise: "amixer sset Master 5%+",
+    /// Opens the system default web browser
+    WebBrowser: "xdg-open http://",
+    /// Opens the (alt+tab) window switcher
+    WindowSwitcher: "cosmic-launcher alt-tab",
+    /// Opens the workspace overview
+    WorkspaceOverview: "cosmic-workspaces",
+}

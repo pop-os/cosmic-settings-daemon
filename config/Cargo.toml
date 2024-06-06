@@ -1,0 +1,13 @@
+[package]
+name = "cosmic-settings-config"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
+serde = { version = "1.0", features = ["derive"] }
+serde_with = "3.8.1"
+smithay = { git = "https://github.com/smithay/smithay.git" }
+thiserror = "1.0.60"
+tracing = "0.1.40"
+xkbcommon = "0.7.0"
