@@ -506,7 +506,7 @@ async fn main() -> zbus::Result<()> {
                                 {
                                     eprintln!("Failed to send theme mode update {err:?}");
                                 }
-                            } else if id.as_str() == cosmic::config::toolkit::ID {
+                            } else if id.as_str() == cosmic::config::ID {
                                 if let Err(err) =
                                     theme_tx.send(theme::ThemeMsg::Tk(key.clone())).await
                                 {
