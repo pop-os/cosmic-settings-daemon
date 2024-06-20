@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "smithay")]
 use smithay::input::keyboard::ModifiersState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -50,6 +51,7 @@ impl Modifiers {
     }
 }
 
+#[cfg(feature = "smithay")]
 impl PartialEq<ModifiersState> for Modifiers {
     fn eq(&self, other: &ModifiersState) -> bool {
         self.ctrl == other.ctrl
@@ -59,6 +61,7 @@ impl PartialEq<ModifiersState> for Modifiers {
     }
 }
 
+#[cfg(feature = "smithay")]
 impl Into<Modifiers> for ModifiersState {
     fn into(self) -> Modifiers {
         Modifiers {

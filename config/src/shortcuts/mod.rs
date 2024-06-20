@@ -159,6 +159,7 @@ pub enum State {
     Released,
 }
 
+#[cfg(feature = "smithay")]
 impl From<State> for smithay::backend::input::KeyState {
     fn from(value: State) -> Self {
         match value {
@@ -168,6 +169,7 @@ impl From<State> for smithay::backend::input::KeyState {
     }
 }
 
+#[cfg(feature = "smithay")]
 impl From<smithay::backend::input::KeyState> for State {
     fn from(value: smithay::backend::input::KeyState) -> Self {
         match value {
