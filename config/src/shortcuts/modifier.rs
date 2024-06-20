@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "smithay")]
-use smithay::input::keyboard::ModifiersState;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum Modifier {
@@ -48,28 +46,6 @@ impl Modifiers {
     pub const fn logo(mut self) -> Self {
         self.logo = true;
         self
-    }
-}
-
-#[cfg(feature = "smithay")]
-impl PartialEq<ModifiersState> for Modifiers {
-    fn eq(&self, other: &ModifiersState) -> bool {
-        self.ctrl == other.ctrl
-            && self.alt == other.alt
-            && self.shift == other.shift
-            && self.logo == other.logo
-    }
-}
-
-#[cfg(feature = "smithay")]
-impl Into<Modifiers> for ModifiersState {
-    fn into(self) -> Modifiers {
-        Modifiers {
-            ctrl: self.ctrl,
-            alt: self.alt,
-            shift: self.shift,
-            logo: self.logo,
-        }
     }
 }
 
