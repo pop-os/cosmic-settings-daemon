@@ -158,23 +158,3 @@ pub enum State {
     Pressed,
     Released,
 }
-
-#[cfg(feature = "smithay")]
-impl From<State> for smithay::backend::input::KeyState {
-    fn from(value: State) -> Self {
-        match value {
-            State::Pressed => smithay::backend::input::KeyState::Pressed,
-            State::Released => smithay::backend::input::KeyState::Released,
-        }
-    }
-}
-
-#[cfg(feature = "smithay")]
-impl From<smithay::backend::input::KeyState> for State {
-    fn from(value: smithay::backend::input::KeyState) -> Self {
-        match value {
-            smithay::backend::input::KeyState::Pressed => State::Pressed,
-            smithay::backend::input::KeyState::Released => State::Released,
-        }
-    }
-}
