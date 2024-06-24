@@ -250,8 +250,8 @@ async fn choose_best_backlight(
         if let Some(sysname) = device.sysname().to_str() {
             match BrightnessDevice::new("backlight", sysname.to_owned()).await {
                 Ok(brightness_device) => {
-                    if brightness_device.max_brightness() > best_max_brightness {
-                        best_max_brightness = brightness_device.max_brightness();
+                    if brightness_device.max_absolute_brightness() > best_max_brightness {
+                        best_max_brightness = brightness_device.max_absolute_brightness();
                         best_backlight = Some(brightness_device);
                     }
                 }
