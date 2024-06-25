@@ -23,10 +23,14 @@ pub const ID: &str = "com.system76.CosmicSettings.Shortcuts";
 
 pub type SystemActions = BTreeMap<action::System, String>;
 
+/// Gets a cosmic-config [Config] context.
 pub fn context() -> Result<cosmic_config::Config, cosmic_config::Error> {
     Config::context()
 }
 
+/// Get the current system shortcut configuration
+///
+/// Merges user-defined custom shortcuts to the system default config
 pub fn shortcuts(context: &cosmic_config::Config) -> Shortcuts {
     // Load shortcuts defined by the system.
     let mut shortcuts = context.get::<Shortcuts>("defaults").unwrap_or_else(|why| {
@@ -45,6 +49,7 @@ pub fn shortcuts(context: &cosmic_config::Config) -> Shortcuts {
     shortcuts
 }
 
+/// Get a map of system actions and their configured commands
 pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
     let mut config = SystemActions::default();
 
@@ -69,6 +74,7 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
     config
 }
 
+/// cosmic-config configuration state for `com.system76.CosmicSettings.Shortcuts`
 #[derive(Clone, Debug, Default, PartialEq, CosmicConfigEntry)]
 #[version = 1]
 pub struct Config {
@@ -93,11 +99,18 @@ impl Config {
     }
 }
 
+/// A map of defined key [Binding]s and their triggerable [Action]s
 #[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 #[serde(transparent)]
 pub struct Shortcuts(pub HashMap<Binding, Action>);
 
 impl Shortcuts {
+    // pub fn default_shortcuts() -> Self {
+    //     Shortcuts(HashMap::from([
+    //         (Binding::new(Modifiers::new()))
+    //     ]))
+    // }
+
     pub fn insert_binding(
         &mut self,
         modifiers: Modifiers,
@@ -153,6 +166,7 @@ impl Shortcuts {
     }
 }
 
+/// Whether a key is pressed or released.
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
 pub enum State {
     Pressed,

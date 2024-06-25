@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
-use std::hash::Hash;
-use std::str::FromStr;
-
 use super::action::Direction;
 use super::{Modifiers, ModifiersDef};
+use heck::ToTitleCase;
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
+use std::str::FromStr;
 use xkbcommon::xkb;
 
-/// Describtion of a key combination that might be
-/// handled by the compositor.
+/// Description of a key combination that may be handled by the compositor
 #[serde_with::serde_as]
 #[derive(Clone, Debug, Default, Deserialize, Eq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -31,6 +30,7 @@ pub struct Binding {
 }
 
 impl Binding {
+    /// Creates a new key binding from a modifier and optional key
     pub fn new(modifiers: impl Into<Modifiers>, key: Option<xkb::Keysym>) -> Binding {
         Binding {
             description: None,
@@ -39,11 +39,26 @@ impl Binding {
         }
     }
 
-    /// Check if the binding is set
-    pub fn is_set(&self) -> bool {
-        &Binding::default() != self
+    /// Check if a modifier was defined
+    pub fn has_modifier(&self) -> bool {
+        self.modifiers.logo || self.modifiers.shift || self.modifiers.alt || self.modifiers.ctrl
     }
 
+    /// Check if the binding has been set
+    pub fn is_set(&self) -> bool {
+        self.has_modifier() && self.key.is_some()
+    }
+
+    /// Check if the key binding is binding directly to Super
+    pub fn is_super(&self) -> bool {
+        self.key.is_none()
+            && self.modifiers.logo
+            && !self.modifiers.shift
+            && !self.modifiers.alt
+            && !self.modifiers.ctrl
+    }
+
+    /// Get the inferred direction of a xkb key
     pub fn inferred_direction(&self) -> Option<Direction> {
         match self.key? {
             xkb::Keysym::Left | xkb::Keysym::h | xkb::Keysym::H => Some(Direction::Left),
@@ -54,6 +69,7 @@ impl Binding {
         }
     }
 
+    /// Append the binding to an existing string
     pub fn to_string_in_place(&self, string: &mut String) {
         if self.modifiers.logo {
             string.push_str("Super+");
@@ -72,7 +88,7 @@ impl Binding {
         }
 
         if let Some(key) = self.key {
-            string.push_str(&xkb::keysym_get_name(key));
+            string.push_str(&xkb::keysym_get_name(key).to_title_case());
         } else if !string.is_empty() {
             string.remove(string.len() - 1);
         }
