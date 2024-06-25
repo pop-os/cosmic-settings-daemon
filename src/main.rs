@@ -132,6 +132,15 @@ impl SettingsDaemon {
     }
 
     #[zbus(property)]
+    async fn max_display_brightness(&self) -> i32 {
+        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
+            brightness_device.max_brightness() as i32
+        } else {
+            -1
+        }
+    }
+
+    #[zbus(property)]
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
             if let Some(brightness_device) = self.display_brightness_device.as_ref() {
