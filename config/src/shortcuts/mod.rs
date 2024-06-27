@@ -111,7 +111,7 @@ impl Shortcuts {
     //     ]))
     // }
 
-    pub fn insert_binding(
+    pub fn insert_default_binding(
         &mut self,
         modifiers: Modifiers,
         keys: impl Iterator<Item = xkb::Keysym>,
