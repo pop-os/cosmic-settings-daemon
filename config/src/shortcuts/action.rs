@@ -11,6 +11,9 @@ pub enum Action {
     /// Show a debug overlay, if enabled in the compositor build
     Debug,
 
+    /// Disable a default shortcut binding
+    Disable,
+
     /// Change focus to the window or workspace in the given direction
     Focus(FocusDirection),
 
