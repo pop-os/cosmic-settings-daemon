@@ -46,7 +46,7 @@ impl Binding {
 
     /// Check if the binding has been set
     pub fn is_set(&self) -> bool {
-        self.has_modifier() && self.key.is_some()
+        (self.has_modifier() && self.key.is_some()) || self.key.map_or(false, xkb::Keysym::is_misc_function_key)
     }
 
     /// Check if the key binding is binding directly to Super
