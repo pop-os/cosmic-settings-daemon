@@ -46,7 +46,13 @@ impl Binding {
 
     /// Check if the binding has been set
     pub fn is_set(&self) -> bool {
-        (self.has_modifier() && self.key.is_some()) || self.key.map_or(false, xkb::Keysym::is_misc_function_key)
+        (self.has_modifier() && self.key.is_some())
+            || self.key.map_or(false, |key| {
+                // Allow Home/End, Print, PageDown/Up, etc.
+                key.is_misc_function_key()
+                    // XF86 keysym range
+                    || matches!(key.raw(), 0x10080001..=0x1008FFFF)
+            })
     }
 
     /// Check if the key binding is binding directly to Super
