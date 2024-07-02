@@ -139,7 +139,7 @@ impl FromStr for Binding {
                         binding.key = Some(Keysym::from_char(lowercased.chars().next().unwrap()));
                         return Ok(binding);
                     } else {
-                        uppercase_first_letter(token)
+                        token
                     };
 
                     return match xkb::keysym_from_name(&name, xkb::KEYSYM_NO_FLAGS) {
@@ -205,6 +205,14 @@ mod tests {
             Ok(Binding::new(
                 Modifiers::new(),
                 Some(xkbcommon::xkb::Keysym::XF86_MonBrightnessDown)
+            ))
+        );
+
+        assert_eq!(
+            Binding::from_str("Super+space"),
+            Ok(Binding::new(
+                Modifiers::new().logo(),
+                Some(xkbcommon::xkb::Keysym::space)
             ))
         );
     }
