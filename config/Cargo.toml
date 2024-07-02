@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-heck = "0.5.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.8.1"
 thiserror = "1.0.60"

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use xkbcommon::xkb;
 
 // From x11rb, used to fill unused keysym table entries.
-const NO_SYMBOL: u32 = 0;
+pub const NO_SYMBOL: u32 = 0;
 
 #[allow(non_snake_case)]
 pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<xkb::Keysym>, D::Error>

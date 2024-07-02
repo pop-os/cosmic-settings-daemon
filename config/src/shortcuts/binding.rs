@@ -2,11 +2,10 @@
 
 use super::action::Direction;
 use super::{Modifiers, ModifiersDef};
-use heck::ToTitleCase;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
 use std::str::FromStr;
-use xkbcommon::xkb;
+use xkbcommon::xkb::{self, Keysym};
 
 /// Description of a key combination that may be handled by the compositor
 #[serde_with::serde_as]
@@ -94,7 +93,7 @@ impl Binding {
         }
 
         if let Some(key) = self.key {
-            string.push_str(&xkb::keysym_get_name(key).to_title_case());
+            string.push_str(&uppercase_first_letter(&xkb::keysym_get_name(key)));
         } else if !string.is_empty() {
             string.remove(string.len() - 1);
         }
@@ -128,29 +127,44 @@ impl FromStr for Binding {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let mut binding = Binding::default();
 
-        for token in value.to_ascii_lowercase().split('+') {
-            match token.trim() {
+        for token in value.split('+') {
+            let token = token.trim();
+            match token.to_ascii_lowercase().as_str() {
                 "super" => binding.modifiers.logo = true,
                 "ctrl" => binding.modifiers.ctrl = true,
                 "alt" => binding.modifiers.alt = true,
                 "shift" => binding.modifiers.shift = true,
-                other => {
-                    return match other.chars().next() {
-                        Some(character) => {
-                            if other.len() != character.len_utf8() {
-                                return Err(format!("{other} should be one character"));
-                            }
+                lowercased => {
+                    let name = if token.chars().count() == 1 {
+                        binding.key = Some(Keysym::from_char(lowercased.chars().next().unwrap()));
+                        return Ok(binding);
+                    } else {
+                        uppercase_first_letter(token)
+                    };
 
-                            binding.key = Some(xkb::Keysym::from_char(character));
+                    return match xkb::keysym_from_name(&name, xkb::KEYSYM_NO_FLAGS) {
+                        x if x.raw() == super::sym::NO_SYMBOL => {
+                            Err(format!("'{name}' is not a valid key symbol"))
+                        }
+
+                        x => {
+                            binding.key = Some(x);
                             Ok(binding)
                         }
-                        None => Err(format!("'{}' is not a character", other)),
-                    }
+                    };
                 }
             }
         }
 
         Err(format!("no key was defined for this binding"))
+    }
+}
+
+fn uppercase_first_letter(input: &str) -> String {
+    let mut chars = input.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }
 
@@ -175,6 +189,22 @@ mod tests {
             Ok(Binding::new(
                 Modifiers::new().logo().ctrl().alt(),
                 Some(xkbcommon::xkb::Keysym::from_char('f'))
+            ))
+        );
+
+        assert_eq!(
+            Binding::from_str("Super+Down"),
+            Ok(Binding::new(
+                Modifiers::new().logo(),
+                Some(xkbcommon::xkb::Keysym::Down)
+            ))
+        );
+
+        assert_eq!(
+            Binding::from_str("XF86MonBrightnessDown"),
+            Ok(Binding::new(
+                Modifiers::new(),
+                Some(xkbcommon::xkb::Keysym::XF86_MonBrightnessDown)
             ))
         );
     }
