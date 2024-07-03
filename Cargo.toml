@@ -21,11 +21,13 @@ geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
     "export",
 ] }
+cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 chrono = "0.4.35"
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 acpid_plug = "0.1.2"
 upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 notify-rust = "4.9.0"
 walkdir = "2.5.0"
 memoize = "0.4.2"

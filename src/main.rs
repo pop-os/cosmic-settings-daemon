@@ -23,6 +23,7 @@ use zbus::{
 };
 mod battery;
 mod brightness_device;
+mod locale;
 mod logind_session;
 mod pipewire;
 mod theme;
@@ -496,6 +497,13 @@ async fn main() -> zbus::Result<()> {
                 }
             });
 
+            let (xkb_tx, xkb_rx) = tokio::sync::mpsc::channel(10);
+            task::spawn_local(async move {
+                if let Err(err) = locale::sync_locale1(xkb_rx).await {
+                    eprintln!("Failed to watch for systemd-localed changes: {}", err);
+                }
+            });
+
             let conn_clone = connection.clone();
             task::spawn_local(async move {
                 while let Some(changes) = rx.recv().await {
@@ -530,6 +538,12 @@ async fn main() -> zbus::Result<()> {
                                 if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(false)).await
                                 {
                                     eprintln!("Failed to send dark theme update {err:?}");
+                                }
+                            } else if id.as_str() == locale::COSMIC_COMP_ID
+                                && key.as_str() == locale::COSMIC_COMP_XDG_KEY
+                            {
+                                if let Err(err) = xkb_tx.send(()).await {
+                                    eprintln!("Failed to send xkb layout update: {err:?}");
                                 }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;
