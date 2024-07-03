@@ -24,9 +24,9 @@
     /// Opens the system default terminal
     Terminal: "cosmic-term",
     /// Lowers the volume of the active output device
-    VolumeLower: "amixer sset Master 5%-",
+    VolumeLower: "amixer sset Master on; amixer sset Master 5%-",
     /// Raises the volume of the active output device
-    VolumeRaise: "amixer sset Master 5%+",
+    VolumeRaise: "amixer sset Master on; amixer sset Master 5%+",
     /// Opens the system default web browser
     WebBrowser: "xdg-open http://",
     /// Opens the (alt+tab) window switcher
