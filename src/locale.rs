@@ -63,7 +63,8 @@ async fn sync_locale1_to_cosmic(
     let current_config = config
         .get::<XkbConfig>(COSMIC_COMP_XDG_KEY)
         .unwrap_or_default();
-    let initial_config = XkbConfig {
+
+    let new_config = XkbConfig {
         model: proxy.x11model().await?,
         layout: proxy.x11layout().await?,
         variant: proxy.x11variant().await?,
@@ -71,10 +72,15 @@ async fn sync_locale1_to_cosmic(
             "" => None,
             x => Some(x.to_string()),
         },
-        ..current_config
+        ..current_config.clone()
     };
+
+    if new_config == current_config {
+        return Ok(());
+    }
+
     config
-        .set::<XkbConfig>(COSMIC_COMP_XDG_KEY, initial_config)
+        .set::<XkbConfig>(COSMIC_COMP_XDG_KEY, new_config)
         .context("Failed to update xkb_config from systemd-localed")?;
     Ok(())
 }
