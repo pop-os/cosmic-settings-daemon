@@ -5,6 +5,7 @@ includedir = $(prefix)/include
 sharedir = $(prefix)/share
 geoclue_agent ?= /usr/libexec/geoclue-2.0/demos/agent
 
+CARGO_TARGET_DIR ?= target
 TARGET = debug
 DEBUG ?= 0
 ifeq ($(DEBUG),0)
@@ -33,7 +34,7 @@ $(BIN): Cargo.toml Cargo.lock src/main.rs vendor-check
 	GEOCLUE_AGENT=${geoclue_agent} cargo build $(ARGS) --bin ${BIN}
 
 install:
-	install -Dm0755 "target/$(TARGET)/$(BIN)" "$(DESTDIR)$(bindir)/$(BIN)"
+	install -Dm0755 "$(CARGO_TARGET_DIR)/$(TARGET)/$(BIN)" "$(DESTDIR)$(bindir)/$(BIN)"
 	install -Dm0644 "data/system_actions.ron" "$(SYSTEM_ACTIONS_CONF)"
 	install -Dm0644 "data/polkit-1/rules.d/cosmic-settings-daemon.rules" "$(POLKIT_RULE)"
 
