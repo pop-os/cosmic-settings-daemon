@@ -19,6 +19,12 @@
     Mute: "amixer sset Master toggle",
     /// Mutes the active microphone
     MuteMic: "amixer sset Capture toggle",
+    /// Plays and Pauses audio
+    PlayPause: "playerctl play-pause",
+    /// Goes to the next track
+    PlayNext: "playerctl next",
+    /// Goes to the previous track
+    PlayPrev: "playerctl previous",
     /// Takes a screenshot
     Screenshot: "cosmic-screenshot",
     /// Opens the system default terminal

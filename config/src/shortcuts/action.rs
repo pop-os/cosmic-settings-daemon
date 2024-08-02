@@ -155,6 +155,12 @@ pub enum System {
     Mute,
     /// Mutes the active microphone
     MuteMic,
+    /// Plays and Pauses audio
+    PlayPause,
+    /// Goes to the next track
+    PlayNext,
+    /// Goes to the previous track
+    PlayPrev,
     /// Takes a screenshot
     Screenshot,
     /// Opens the system default terminal

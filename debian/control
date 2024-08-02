@@ -20,5 +20,6 @@ Depends:
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
-  geoclue-2.0
+  geoclue-2.0,
+  playerctl,
 Description: Cosmic settings daemon
