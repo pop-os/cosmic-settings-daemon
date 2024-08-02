@@ -1,3 +1,6 @@
+// Copyright 2023 System76 <info@system76.com>
+// SPDX-License-Identifier: GPL-3.0-only
+
 // TODO later...
 // If configured to, run scripts in XDG_DATA_DIR/dark-mode.d/ or XDG_DATA_DIR/light-mode.d/
 // when the theme is set to auto-export color palette, write to gtk3 / gtk4 / kde / ... css files

@@ -1,3 +1,6 @@
+// Copyright 2023 System76 <info@system76.com>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use acpid_plug::AcPlugEvents;
 use notify_rust::Notification;
 use std::time::Instant;

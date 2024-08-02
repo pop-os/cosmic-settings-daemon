@@ -1,3 +1,6 @@
+// Copyright 2023 System76 <info@system76.com>
+// SPDX-License-Identifier: GPL-3.0-only
+
 #[zbus::proxy(
     default_service = "org.freedesktop.login1",
     interface = "org.freedesktop.login1.Session",

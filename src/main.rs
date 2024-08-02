@@ -1,4 +1,8 @@
+// Copyright 2023 System76 <info@system76.com>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use brightness_device::BrightnessDevice;
+use cosmic_config::ConfigGet;
 use logind_session::LogindSessionProxy;
 use notify::{event::ModifyKind, EventKind, Watcher};
 use std::sync::atomic::AtomicU64;
@@ -16,6 +20,8 @@ use tokio::{
     task,
 };
 use tokio_stream::StreamExt;
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::EnvFilter;
 use zbus::{
     names::{MemberName, UniqueName, WellKnownName},
     zvariant::ObjectPath,
@@ -27,11 +33,15 @@ mod locale;
 mod logind_session;
 mod pipewire;
 mod theme;
+mod timezone;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
 // TODO: notifications; statusnotifierwatcher, media keybindings
 // Scale brightness to 0 to 100? Or something else? Float?
+
+static COSMIC_SETTINGS_ID: &str = "com.system76.CosmicSettings";
+static AUTO_TIMEZONE_ID: &str = "auto_timezone";
 
 pub static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 const GEOCLUE_AGENT: Option<&'static str> = option_env!("GEOCLUE_AGENT");
@@ -336,11 +346,20 @@ pub enum Change {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> zbus::Result<()> {
+async fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
+
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env().add_directive(LevelFilter::INFO.into()))
+        .init();
+
     std::process::Command::new(GEOCLUE_AGENT.unwrap_or("/usr/libexec/geoclue-2.0/demos/agent"))
         .spawn()?;
+
     task::LocalSet::new()
         .run_until(async {
+            let cosmic_settings_config = cosmic_config::Config::new(COSMIC_SETTINGS_ID, 1).unwrap();
+
             let backlights = match backlight_enumerate() {
                 Ok(backlights) => backlights,
                 Err(err) => {
@@ -463,6 +482,14 @@ async fn main() -> zbus::Result<()> {
 
             tokio::task::spawn_local(battery::monitor());
 
+            let (timezone_tx, timezone_rx) = tokio::sync::mpsc::channel(1);
+            tokio::task::spawn_local(timezone::daemon(
+                cosmic_settings_config
+                    .get::<bool>(AUTO_TIMEZONE_ID)
+                    .unwrap_or_default(),
+                timezone_rx,
+            ));
+
             let conn_clone = connection.clone();
             let (ready_oneshot_tx, mut ready_oneshot_rx) = tokio::sync::oneshot::channel();
             task::spawn_local(async move {
@@ -544,6 +571,16 @@ async fn main() -> zbus::Result<()> {
                             {
                                 if let Err(err) = xkb_tx.send(()).await {
                                     eprintln!("Failed to send xkb layout update: {err:?}");
+                                }
+                            } else if id.as_str() == COSMIC_SETTINGS_ID
+                                && key.as_str() == AUTO_TIMEZONE_ID
+                            {
+                                if let Ok(enable) =
+                                    cosmic_settings_config.get::<bool>(AUTO_TIMEZONE_ID)
+                                {
+                                    _ = timezone_tx
+                                        .send(timezone::Message::AutoTimezone(enable))
+                                        .await;
                                 }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;

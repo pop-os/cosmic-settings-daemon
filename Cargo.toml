@@ -8,29 +8,37 @@ license = "GPL-3.0-or-later"
 members = ["config"]
 
 [dependencies]
+acpid_plug = "0.1.2"
 anyhow = "1.0.79"
+chrono = "0.4.35"
 clap = "4.2.7"
-dirs = "5.0.1"
-notify = "6.1.1"
-tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
-udev = "0.8.0"
-zbus = { version = "4.2", default-features = false, features = ["tokio"] }
-tokio-stream = "0.1.14"
-sunrise = "1.0.1"
-geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+color-eyre = "0.6.3"
+cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
     "export",
 ] }
-cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-chrono = "0.4.35"
+dirs = "5.0.1"
+eyre = "0.6.12"
+futures-util = "0.3.30"
+geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
-acpid_plug = "0.1.2"
-upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-notify-rust = "4.9.0"
-walkdir = "2.5.0"
 memoize = "0.4.2"
+notify = "6.1.1"
+notify-rust = "4.9.0"
+sunrise = "1.0.1"
+timedate-zbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
+tokio-stream = "0.1.14"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tzf-rs = "0.4.8"
+udev = "0.8.0"
+upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+walkdir = "2.5.0"
+zbus = { version = "4.2", default-features = false, features = ["tokio"] }
+
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
