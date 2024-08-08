@@ -171,7 +171,7 @@ pub async fn watch_theme(
                 t
             }
         };
-        _ = dark.write_exports();
+        _ = dark.write_gtk4();
         let light = match Theme::get_entry(&light_helper) {
             Ok(t) => t,
             Err((errs, t)) => {
@@ -181,7 +181,7 @@ pub async fn watch_theme(
                 t
             }
         };
-        _ = light.write_exports();
+        _ = light.write_gtk4();
         _ = std::process::Command::new("flatpak")
             .arg("override")
             .arg("--user")
@@ -190,14 +190,14 @@ pub async fn watch_theme(
 
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
-            if let Err(err) = t.apply_exports() {
+            if let Err(err) = Theme::apply_gtk(t.is_dark) {
                 eprintln!("Failed to apply the theme to gtk. {err:?}");
             }
         }
 
         set_gnome_desktop_interface(theme_mode.is_dark);
     } else {
-        if let Err(err) = Theme::reset_exports() {
+        if let Err(err) = Theme::reset_gtk() {
             eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
         }
     }
@@ -287,7 +287,7 @@ pub async fn watch_theme(
                                 }
                             };
 
-                            if let Err(err) = theme.apply_exports() {
+                            if let Err(err) = Theme::apply_gtk(theme.is_dark) {
                                 eprintln!("Failed to apply the theme to gtk. {err:?}");
                             }
 
@@ -324,7 +324,7 @@ pub async fn watch_theme(
                                     t
                                 }
                             };
-                            _ = dark.write_exports();
+                            _ = dark.write_gtk4();
                             let light = match Theme::get_entry(&light_helper) {
                                 Ok(t) => t,
                                 Err((errs, t)) => {
@@ -334,7 +334,7 @@ pub async fn watch_theme(
                                     t
                                 }
                             };
-                            _ = light.write_exports();
+                            _ = light.write_gtk4();
                             let _ = std::process::Command::new("flatpak")
                                 .arg("override")
                                 .arg("--user")
@@ -342,13 +342,13 @@ pub async fn watch_theme(
                                 .spawn();
 
                             let t = if theme_mode.is_dark { dark } else { light };
-                            if let Err(err) = t.apply_exports() {
+                            if let Err(err) = Theme::apply_gtk(t.is_dark) {
                                 eprintln!("Failed to apply the theme to gtk. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
                         } else {
-                            if let Err(err) = Theme::reset_exports() {
+                            if let Err(err) = Theme::reset_gtk() {
                                 eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
                             }
                         }
@@ -368,7 +368,7 @@ pub async fn watch_theme(
                                 },
                             };
                         if tk.apply_theme_global {
-                            if let Err(err) = t.write_exports() {
+                            if let Err(err) = t.write_gtk4() {
                                 eprintln!("Failed to write gtk4 css. {err:?}");
                             }
                             let theme_mode = match ThemeMode::get_entry(&helper) {
@@ -381,7 +381,7 @@ pub async fn watch_theme(
                                 },
                             };
                             if theme_mode.is_dark == is_dark {
-                                if let Err(err) = t.apply_exports() {
+                                if let Err(err) = Theme::apply_gtk(t.is_dark) {
                                     eprintln!("Failed to apply the theme to gtk. {err:?}");
                                 }
                             }
@@ -420,7 +420,7 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = theme.apply_exports() {
+                    if let Err(err) = Theme::apply_gtk(theme.is_dark) {
                         eprintln!("Failed to apply the theme to gtk. {err:?}");
                     }
 
@@ -489,7 +489,7 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = theme.apply_exports() {
+                    if let Err(err) = Theme::apply_gtk(theme.is_dark) {
                         eprintln!("Failed to apply the theme to gtk. {err:?}");
                     }
 
