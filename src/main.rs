@@ -167,7 +167,12 @@ impl SettingsDaemon {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
-            self.set_display_brightness((value + step).max(0)).await;
+            let max = self.max_display_brightness().await;
+            if (max - value) < step {
+                self.set_display_brightness(max).await;
+            } else {
+                self.set_display_brightness((value + step).max(0)).await;
+            }
             _ = self.display_brightness_changed(&ctxt).await;
         }
     }
