@@ -17,6 +17,7 @@ Architecture: amd64 arm64
 Depends:
   acpid,
   adw-gtk3,
+  pop-sound-theme,
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
