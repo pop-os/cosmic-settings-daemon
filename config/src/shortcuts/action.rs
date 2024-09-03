@@ -171,8 +171,10 @@ pub enum System {
     VolumeRaise,
     /// Opens the system default web browser
     WebBrowser,
-    /// Opens the (alt+tab) window switcher
+    /// Opens the (alt+tab) window switcher and cycle forwards
     WindowSwitcher,
+    /// Opens the (alt+tab) window switcher and cycle backwards
+    WindowSwitcherReverse,
     /// Opens the workspace overview
     WorkspaceOverview,
 }
