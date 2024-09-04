@@ -64,7 +64,7 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
     let defaults = context
         .get::<Vec<DefaultApplicationException>>("tiling_exception_defaults")
         .unwrap_or_else(|why| {
-            tracing::error!("shortcuts defaults config error: {why:?}");
+            tracing::error!("tiling exceptions defaults config error: {why:?}");
             Vec::new()
         });
 
@@ -77,7 +77,7 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
     let custom = context
         .get::<Vec<PreciseApplicationException>>("tiling_exception_custom")
         .unwrap_or_else(|why| {
-            tracing::error!("shortcuts custom config error: {why:?}");
+            tracing::error!("tiling exceptions custom config error: {why:?}");
             Vec::new()
         });
 
