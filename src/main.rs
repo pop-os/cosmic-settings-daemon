@@ -342,8 +342,14 @@ pub enum Change {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> zbus::Result<()> {
-    std::process::Command::new(GEOCLUE_AGENT.unwrap_or("/usr/libexec/geoclue-2.0/demos/agent"))
-        .spawn()?;
+    // Try to start Geoclue agent
+    if let Err(err) =
+        std::process::Command::new(GEOCLUE_AGENT.unwrap_or("/usr/libexec/geoclue-2.0/demos/agent"))
+            .spawn()
+    {
+        eprintln!("Failed to start Geoclue agent: {err}");
+    }
+
     task::LocalSet::new()
         .run_until(async {
             let backlights = match backlight_enumerate() {
