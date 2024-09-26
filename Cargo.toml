@@ -8,14 +8,14 @@ license = "GPL-3.0-or-later"
 members = ["config"]
 
 [dependencies]
-anyhow = "1.0.79"
-clap = "4.2.7"
+anyhow = "1.0.89"
+clap = "4.5.18"
 dirs = "5.0.1"
 notify = "6.1.1"
-tokio = { version = "1.19.2", features = ["macros", "net", "rt"] }
+tokio = { version = "1.40.0", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
-zbus = { version = "4.2", default-features = false, features = ["tokio"] }
-tokio-stream = "0.1.14"
+zbus = { version = "4.4", default-features = false, features = ["tokio"] }
+tokio-stream = "0.1.16"
 sunrise = "1.0.1"
 geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
@@ -23,14 +23,15 @@ cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
 ] }
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-chrono = "0.4.35"
+chrono = "0.4.38"
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 acpid_plug = "0.1.2"
 upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-notify-rust = "4.9.0"
+notify-rust = "4.11.3"
 walkdir = "2.5.0"
 memoize = "0.4.2"
+futures-util = "0.3.30"
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
