@@ -1,3 +1,5 @@
+use std::{io::Write, time::Duration};
+
 use anyhow::Context;
 use cosmic_comp_config::XkbConfig;
 use cosmic_config::{ConfigGet, ConfigSet};
@@ -13,18 +15,40 @@ pub async fn sync_locale1(mut rx: Receiver<()>) -> anyhow::Result<()> {
     let config = cosmic_config::Config::new(COSMIC_COMP_ID, 1)
         .context("Found no cosmic-comp configuration")?;
 
-    sync_locale1_to_cosmic(&config, &proxy)
-        .await
-        .context("Failed to read initial locale1 xkb configuration")?;
-
     let mut model_stream = proxy.receive_x11model_changed().await;
     let mut layout_stream = proxy.receive_x11layout_changed().await;
     let mut variant_stream = proxy.receive_x11variant_changed().await;
     let mut options_stream = proxy.receive_x11options_changed().await;
 
+    // Consume events that are emitted on startup.
+    _ = tokio::time::timeout(Duration::from_secs(1), async {
+        loop {
+            tokio::select! {
+                _ = model_stream.next() => (),
+                _ = layout_stream.next() => (),
+                _ = variant_stream.next() => (),
+                _ = options_stream.next() => (),
+            }
+        }
+    })
+    .await;
+
+    // Sync on startup only if the xkb config is not set.
+    if config.get::<XkbConfig>(COSMIC_COMP_XDG_KEY).is_err() {
+        _ = sync_locale1_to_cosmic(&config, &proxy).await;
+    } else {
+        _ = sync_cosmic_to_locale1(&config, &proxy).await;
+    }
+
     loop {
         if let Err(err) = tokio::select! {
-            _ = rx.recv() => sync_cosmic_to_locale1(&config, &proxy).await,
+            received = rx.recv() => {
+                if received.is_some() {
+                    sync_cosmic_to_locale1(&config, &proxy).await
+                } else {
+                    Ok(())
+                }
+            },
             _ = model_stream.next() => sync_locale1_to_cosmic(&config, &proxy).await,
             _ = layout_stream.next() => sync_locale1_to_cosmic(&config, &proxy).await,
             _ = variant_stream.next() => sync_locale1_to_cosmic(&config, &proxy).await,
@@ -41,7 +65,8 @@ async fn sync_cosmic_to_locale1(
 ) -> anyhow::Result<()> {
     let xkb_config = config
         .get::<XkbConfig>(COSMIC_COMP_XDG_KEY)
-        .unwrap_or_default();
+        .context("xkb-config not set")?;
+
     proxy
         .set_x11keyboard(
             &xkb_config.layout,
@@ -60,15 +85,38 @@ async fn sync_locale1_to_cosmic(
     config: &cosmic_config::Config,
     proxy: &locale1::locale1Proxy<'_>,
 ) -> anyhow::Result<()> {
+    let (model, layout, variant, options) = futures_util::try_join!(
+        proxy.x11model(),
+        proxy.x11layout(),
+        proxy.x11variant(),
+        proxy.x11options()
+    )
+    .context("failed to get xkb config from locale1 daemon")?;
+
+    _ = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/home/mmstick/locales")
+        .unwrap()
+        .write_all(
+            format!(
+                "{:?}: model: {model}, layout: {layout}, variant: {variant}, options: {options}\n",
+                std::time::SystemTime::now()
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .unwrap()
+            )
+            .as_bytes(),
+        );
+
     let current_config = config
         .get::<XkbConfig>(COSMIC_COMP_XDG_KEY)
         .unwrap_or_default();
 
     let new_config = XkbConfig {
-        model: proxy.x11model().await?,
-        layout: proxy.x11layout().await?,
-        variant: proxy.x11variant().await?,
-        options: match proxy.x11options().await?.as_str() {
+        model,
+        layout,
+        variant,
+        options: match options.as_str() {
             "" => None,
             x => Some(x.to_string()),
         },
