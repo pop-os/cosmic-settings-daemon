@@ -1,4 +1,4 @@
-use std::{io::Write, time::Duration};
+use std::time::Duration;
 
 use anyhow::Context;
 use cosmic_comp_config::XkbConfig;
@@ -92,21 +92,6 @@ async fn sync_locale1_to_cosmic(
         proxy.x11options()
     )
     .context("failed to get xkb config from locale1 daemon")?;
-
-    _ = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("/home/mmstick/locales")
-        .unwrap()
-        .write_all(
-            format!(
-                "{:?}: model: {model}, layout: {layout}, variant: {variant}, options: {options}\n",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                    .unwrap()
-            )
-            .as_bytes(),
-        );
 
     let current_config = config
         .get::<XkbConfig>(COSMIC_COMP_XDG_KEY)
