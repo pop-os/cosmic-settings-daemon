@@ -33,6 +33,9 @@ walkdir = "2.5.0"
 memoize = "0.4.2"
 futures-util = "0.3.30"
 
+[profile.release]
+lto = "fat"
+
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
 # libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "fix-gtk-rgba" }
