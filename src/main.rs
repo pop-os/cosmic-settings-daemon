@@ -21,8 +21,9 @@ use tokio::{
 use tokio_stream::StreamExt;
 use zbus::{
     names::{MemberName, UniqueName, WellKnownName},
+    object_server::SignalEmitter,
     zvariant::ObjectPath,
-    Connection, MatchRule, MessageStream, SignalContext,
+    Connection, MatchRule, MessageStream,
 };
 mod battery;
 mod brightness_device;
@@ -74,7 +75,7 @@ impl Config {
 #[zbus::interface(name = "com.system76.CosmicSettingsDaemon.Config")]
 impl Config {
     #[zbus(signal)]
-    async fn changed(ctxt: &SignalContext<'_>, id: String, key: String) -> zbus::Result<()>;
+    async fn changed(emitter: &SignalEmitter<'_>, id: String, key: String) -> zbus::Result<()>;
 }
 
 impl Config {
@@ -174,7 +175,7 @@ impl SettingsDaemon {
 
     async fn increase_display_brightness(
         &self,
-        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
@@ -185,20 +186,20 @@ impl SettingsDaemon {
             } else {
                 self.set_display_brightness((value + step).max(0)).await;
             }
-            _ = self.display_brightness_changed(&ctxt).await;
+            _ = self.display_brightness_changed(&emitter).await;
         }
     }
 
     async fn decrease_display_brightness(
         &self,
 
-        #[zbus(signal_context)] ctxt: zbus::SignalContext<'_>,
+        #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
             self.set_display_brightness((value - step).max(0)).await;
-            _ = self.display_brightness_changed(&ctxt).await;
+            _ = self.display_brightness_changed(&emitter).await;
         }
     }
 
@@ -240,7 +241,7 @@ impl SettingsDaemon {
         }
         let path = config.path(id, version);
         let name = config.name(id, version);
-        let conn = zbus::ConnectionBuilder::session()?
+        let conn = zbus::connection::Builder::session()?
             .name(name.as_str())?
             .serve_at(path.to_owned(), config)?
             .build()
@@ -299,7 +300,7 @@ async fn backlight_monitor_task(
         .await
         .unwrap();
 
-    let ctxt = zbus::SignalContext::new(&connection, DBUS_PATH).unwrap();
+    let emitter = SignalEmitter::new(&connection, DBUS_PATH).unwrap();
 
     match backlight_monitor() {
         Ok(mut socket) => {
@@ -315,7 +316,7 @@ async fn backlight_monitor_task(
                             _ = interface
                                 .get()
                                 .await
-                                .display_brightness_changed(&ctxt)
+                                .display_brightness_changed(&emitter)
                                 .await;
                         }
                         udev::EventType::Remove => {
@@ -325,14 +326,14 @@ async fn backlight_monitor_task(
                             _ = interface
                                 .get()
                                 .await
-                                .display_brightness_changed(&ctxt)
+                                .display_brightness_changed(&emitter)
                                 .await;
                         }
                         udev::EventType::Change => {
                             _ = interface
                                 .get()
                                 .await
-                                .display_brightness_changed(&ctxt)
+                                .display_brightness_changed(&emitter)
                                 .await;
                         }
                         _ => {}
@@ -481,7 +482,7 @@ async fn main() -> zbus::Result<()> {
                 watched_states: watched_states.clone(),
             };
 
-            let connection = zbus::ConnectionBuilder::session()?
+            let connection = zbus::connection::Builder::session()?
                 .name(DBUS_NAME)?
                 .serve_at(DBUS_PATH, settings_daemon)?
                 .build()
@@ -608,7 +609,7 @@ async fn main() -> zbus::Result<()> {
                             };
 
                             if let Err(err) = Config::changed(
-                                config.signal_context(),
+                                config.signal_emitter(),
                                 id.to_string(),
                                 key.to_string(),
                             )
@@ -629,7 +630,7 @@ async fn main() -> zbus::Result<()> {
                             };
 
                             if let Err(err) = Config::changed(
-                                state.signal_context(),
+                                state.signal_emitter(),
                                 id.to_string(),
                                 key.to_string(),
                             )
@@ -661,7 +662,7 @@ async fn watch_config_message_stream(
 ) -> zbus::Result<()> {
     let mut theme_oneshot_tx = Some(theme_oneshot_tx);
     let config_rule = MatchRule::builder()
-        .msg_type(zbus::MessageType::MethodCall)
+        .msg_type(zbus::message::Type::MethodCall)
         .member("WatchConfig")?
         .interface("com.system76.CosmicSettingsDaemon")?
         .build();
@@ -671,7 +672,7 @@ async fn watch_config_message_stream(
         HashMap::new();
 
     let state_rule = MatchRule::builder()
-        .msg_type(zbus::MessageType::MethodCall)
+        .msg_type(zbus::message::Type::MethodCall)
         .member("WatchState")?
         .interface("com.system76.CosmicSettingsDaemon")?
         .build();
@@ -681,7 +682,7 @@ async fn watch_config_message_stream(
         HashMap::new();
 
     let name_changed_rule = MatchRule::builder()
-        .msg_type(zbus::MessageType::Signal)
+        .msg_type(zbus::message::Type::Signal)
         .sender("org.freedesktop.DBus")?
         .member("NameOwnerChanged")?
         .interface("org.freedesktop.DBus")?

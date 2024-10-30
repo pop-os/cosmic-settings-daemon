@@ -21,7 +21,7 @@ dirs = "5.0.1"
 notify = "6.1.1"
 tokio = { version = "1.44.1", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
-zbus = { version = "4.4", default-features = false, features = ["tokio"] }
+zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.17"
 sunrise = "1.2.1"
 geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
@@ -42,6 +42,13 @@ futures-util = "0.3.31"
 futures = "0.3.31"
 ctrlc = { version = "3.4.5", features = ["termination"] }
 xkb-data = "0.2.1"
+
+[patch.crates-io]
+smithay-client-toolkit = { git = "https://github.com/smithay/client-toolkit" }
+
+[patch."https://github.com/pop-os/cosmic-protocols"]
+cosmic-protocols = { git = "https://github.com/pop-os//cosmic-protocols" }
+cosmic-client-toolkit = { git = "https://github.com/pop-os//cosmic-protocols" }
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
