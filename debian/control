@@ -8,6 +8,7 @@ Build-Depends:
   cargo,
   libudev-dev,
   libinput-dev,
+  libxkbcommon-dev,
   pulseaudio-utils,
   pkg-config,
 Standards-Version: 4.3.0
