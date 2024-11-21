@@ -32,6 +32,7 @@ notify-rust = "4.11.3"
 walkdir = "2.5.0"
 memoize = "0.4.2"
 futures-util = "0.3.30"
+ctrlc = { version = "3.4.5", features = ["termination"] }
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']

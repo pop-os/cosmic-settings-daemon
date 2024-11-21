@@ -131,6 +131,8 @@ impl SunriseSunset {
 pub async fn watch_theme(
     theme_mode_rx: &mut tokio::sync::mpsc::Receiver<ThemeMsg>,
     ready_oneshot: tokio::sync::oneshot::Receiver<()>,
+    cleanup_tx: tokio::sync::mpsc::Sender<()>,
+    mut sigterm_rx: tokio::sync::broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
     ready_oneshot.await?;
     let mut override_until_next = false;
@@ -242,6 +244,12 @@ pub async fn watch_theme(
         };
 
         tokio::select! {
+            _ = sigterm_rx.recv() => {
+                if let Err(err) = Theme::reset_gtk() {
+                    eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
+                }
+                cleanup_tx.send(()).await.unwrap();
+            }
             changes = theme_mode_rx.recv() => {
 
                 let Some(changes) = changes else {
