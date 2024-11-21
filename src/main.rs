@@ -5,7 +5,7 @@ use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
-    future, io,
+    io,
     path::PathBuf,
     sync::{atomic::Ordering, Arc},
 };
@@ -342,6 +342,14 @@ pub enum Change {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> zbus::Result<()> {
+    let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
+    let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
+
+    ctrlc::set_handler(move || {
+        sigterm_tx.send(()).unwrap();
+    })
+    .expect("Error setting sigterm handler");
+
     // Try to start Geoclue agent
     if let Err(err) =
         std::process::Command::new(GEOCLUE_AGENT.unwrap_or("/usr/libexec/geoclue-2.0/demos/agent"))
@@ -351,7 +359,7 @@ async fn main() -> zbus::Result<()> {
     }
 
     task::LocalSet::new()
-        .run_until(async {
+        .run_until(async move {
             let backlights = match backlight_enumerate() {
                 Ok(backlights) => backlights,
                 Err(err) => {
@@ -494,7 +502,14 @@ async fn main() -> zbus::Result<()> {
                 let mut sleep = Duration::from_millis(100);
 
                 loop {
-                    if let Err(err) = watch_theme(&mut theme_rx, ready_oneshot_rx).await {
+                    if let Err(err) = watch_theme(
+                        &mut theme_rx,
+                        ready_oneshot_rx,
+                        theme_cleanup_done_tx.clone(),
+                        sigterm_rx.resubscribe(),
+                    )
+                    .await
+                    {
                         eprintln!(
                             "Failed to watch theme {err:?}. Will try again in {}s",
                             sleep.as_secs()
@@ -603,7 +618,7 @@ async fn main() -> zbus::Result<()> {
                 }
             });
 
-            future::pending::<()>().await;
+            _ = theme_cleanup_done_rx.recv().await;
 
             Ok(())
         })
