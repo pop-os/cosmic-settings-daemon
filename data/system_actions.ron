@@ -35,8 +35,10 @@
     VolumeRaise: "amixer sset Master on; amixer sset Master 5%+",
     /// Opens the system default web browser
     WebBrowser: "xdg-open http://",
-    /// Opens the (alt+tab) window switcher
+    /// Opens the (alt+tab) window switcher and cycle forwards
     WindowSwitcher: "cosmic-launcher alt-tab",
+    /// Opens the (alt+tab) window switcher and cycle backwards
+    WindowSwitcherReverse: "cosmic-launcher alt-tab --reverse",
     /// Opens the workspace overview
     WorkspaceOverview: "cosmic-workspaces",
 }
