@@ -173,6 +173,8 @@ pub enum System {
     WebBrowser,
     /// Opens the (alt+tab) window switcher
     WindowSwitcher,
+    /// Opens the (alt+shift+tab) window switcher
+    WindowSwitcherPrevious,
     /// Opens the workspace overview
     WorkspaceOverview,
 }
