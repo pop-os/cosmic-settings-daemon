@@ -14,10 +14,10 @@ dirs = "5.0.1"
 notify = "6.1.1"
 tokio = { version = "1.40.0", features = ["macros", "net", "rt"] }
 udev = "0.8.0"
-zbus = { version = "4.4", default-features = false, features = ["tokio"] }
+zbus = { version = "5.0", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.16"
 sunrise = "1.0.1"
-geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings", branch = "zbus5" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
     "export",
 ] }
@@ -26,8 +26,8 @@ cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 chrono = "0.4.38"
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 acpid_plug = "0.1.2"
-upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings", branch = "zbus5" }
+locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings", branch = "zbus5" }
 notify-rust = "4.11.3"
 walkdir = "2.5.0"
 memoize = "0.4.2"
