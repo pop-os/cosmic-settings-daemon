@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 /// An operation which may be bound to a keyboard shortcut.
@@ -180,7 +182,7 @@ pub enum System {
 }
 
 /// Defines the direction of an operation
-#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, Hash)]
 pub enum Direction {
     Left,
     Right,
@@ -196,6 +198,31 @@ impl std::ops::Not for Direction {
             Direction::Right => Direction::Left,
             Direction::Up => Direction::Down,
             Direction::Down => Direction::Up,
+        }
+    }
+}
+
+impl ToString for Direction {
+    fn to_string(&self) -> String {
+        match self {
+            Direction::Left => "Left".to_string(),
+            Direction::Right => "Right".to_string(),
+            Direction::Up => "Up".to_string(),
+            Direction::Down => "Down".to_string(),
+        }
+    }
+}
+
+impl FromStr for Direction {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Down" => Ok(Self::Down),
+            "Up" => Ok(Self::Up),
+            "Left" => Ok(Self::Left),
+            "Right" => Ok(Self::Right),
+            _ => return Err(format!("String {} cannot be converted to direction.", s)),
         }
     }
 }
