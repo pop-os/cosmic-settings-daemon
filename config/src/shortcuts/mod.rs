@@ -8,7 +8,9 @@ pub mod modifier;
 pub use modifier::{Modifier, Modifiers, ModifiersDef};
 
 mod binding;
+mod gesture;
 pub use binding::Binding;
+pub use gesture::Gesture;
 
 pub mod sym;
 
@@ -80,6 +82,8 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
 pub struct Config {
     pub defaults: Shortcuts,
     pub custom: Shortcuts,
+    pub default_gestures: Gestures,
+    pub custom_gestures: Gestures,
     pub system_actions: SystemActions,
 }
 
@@ -96,6 +100,18 @@ impl Config {
         self.custom
             .shortcut_for_action(action)
             .or_else(|| self.defaults.shortcut_for_action(action))
+    }
+
+    pub fn gestures(&self) -> impl Iterator<Item = (&Gesture, &Action)> {
+        self.custom_gestures
+            .iter()
+            .chain(self.default_gestures.iter())
+    }
+
+    pub fn gesture_for_action(&self, action: &Action) -> Option<String> {
+        self.custom_gestures
+            .gesture_for_action(action)
+            .or_else(|| self.default_gestures.gesture_for_action(action))
     }
 }
 
@@ -171,4 +187,50 @@ impl Shortcuts {
 pub enum State {
     Pressed,
     Released,
+}
+
+/// A map of defined [Gesture]s and their triggerable [Action]s
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct Gestures(pub HashMap<Gesture, Action>);
+
+impl Gestures {
+    pub fn insert_default_gesture(
+        &mut self,
+        fingers: i32,
+        direction: gesture::Direction,
+        action: Action,
+    ) {
+        if !self.0.values().any(|a| a == &action) {
+            let pattern = Gesture {
+                description: None,
+                fingers,
+                direction,
+            };
+            if !self.0.contains_key(&pattern) {
+                self.0.insert(pattern, action.clone());
+            }
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&Gesture, &Action)> {
+        self.0.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Gesture, &mut Action)> {
+        self.0.iter_mut()
+    }
+
+    pub fn gesture_for_action(&self, action: &Action) -> Option<String> {
+        self.gestures(action)
+            .next() // take the first one
+            .map(|gesture| gesture.to_string())
+    }
+
+    pub fn gestures<'a>(&'a self, action: &'a Action) -> impl Iterator<Item = &'a Gesture> {
+        self.0
+            .iter()
+            .filter(move |(_, a)| *a == action)
+            .map(|(b, _)| b)
+    }
 }
