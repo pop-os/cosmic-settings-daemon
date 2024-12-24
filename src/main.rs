@@ -706,8 +706,8 @@ async fn watch_config_message_stream(
             let Ok((id, version)) = msg.body().deserialize::<(String, u64)>() else {
                 continue;
             };
-            if let Some(theme_oneshot_tx) = theme_oneshot_tx.take() {
-                if id == cosmic_theme::THEME_MODE_ID {
+            if id == cosmic_theme::THEME_MODE_ID {
+                if let Some(theme_oneshot_tx) = theme_oneshot_tx.take() {
                     _ = theme_oneshot_tx.send(());
                 }
             }
