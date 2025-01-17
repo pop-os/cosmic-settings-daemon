@@ -7,6 +7,8 @@
     BrightnessUp: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon IncreaseDisplayBrightness",
     /// Opens the home folder in a system default file browser
     HomeFolder: "xdg-open ~",
+    /// Logs out
+    LogOut: "cosmic-osd log-out",
     /// Decreases keyboard brightness
     // KeyboardBrightnessDown,
     /// Increases keyboard brightness

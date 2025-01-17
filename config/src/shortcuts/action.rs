@@ -151,6 +151,8 @@ pub enum System {
     Launcher,
     /// Locks the screen
     LockScreen,
+    /// Logs out
+    LogOut,
     /// Mutes the active audio output
     Mute,
     /// Mutes the active microphone
