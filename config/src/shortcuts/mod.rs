@@ -55,8 +55,8 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
 
     // Get the system config first
     if let Ok(context) = cosmic_config::Config::system(ID, Config::VERSION) {
-        match context.get::<SystemActions>("system_actions") {
-            Ok(system_config) => config = system_config,
+        match context.get::<SystemActionsImpl>("system_actions") {
+            Ok(system_config) => config = system_config.0,
             Err(why) => {
                 tracing::error!("failed to read system shortcuts config 'system_actions': {why:?}");
             }
@@ -64,8 +64,8 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
     }
 
     // Then override it with the user's config
-    match context.get::<SystemActions>("system_actions") {
-        Ok(user_config) => config.extend(user_config),
+    match context.get::<SystemActionsImpl>("system_actions") {
+        Ok(user_config) => config.extend(user_config.0),
         Err(why) => {
             tracing::error!("failed to read local shortcuts config 'system_actions': {why:?}");
         }
@@ -100,9 +100,53 @@ impl Config {
 }
 
 /// A map of defined key [Binding]s and their triggerable [Action]s
-#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize)]
 #[serde(transparent)]
 pub struct Shortcuts(pub HashMap<Binding, Action>);
+
+struct ShortcutMapVisitor;
+
+impl<'de> serde::de::Visitor<'de> for ShortcutMapVisitor {
+    type Value = Shortcuts;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("Shortcuts Map")
+    }
+
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where
+        M: serde::de::MapAccess<'de>,
+    {
+        let mut map = HashMap::with_capacity(access.size_hint().unwrap_or(0));
+
+        while let Some((binding, action)) = access.next_entry::<Binding, &ron::value::RawValue>()? {
+            match action.into_rust::<Action>() {
+                Ok(val) => {
+                    map.insert(binding, val);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Skipping over invalid Action ({}): {}",
+                        action.get_ron(),
+                        err
+                    );
+                    map.insert(binding, Action::Disable);
+                }
+            };
+        }
+
+        Ok(Shortcuts(map))
+    }
+}
+
+impl<'de> Deserialize<'de> for Shortcuts {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_map(ShortcutMapVisitor)
+    }
+}
 
 impl Shortcuts {
     // pub fn default_shortcuts() -> Self {
@@ -171,4 +215,49 @@ impl Shortcuts {
 pub enum State {
     Pressed,
     Released,
+}
+
+pub struct SystemActionsImpl(SystemActions);
+
+struct SystemActionsMapVisitor;
+
+impl<'de> serde::de::Visitor<'de> for SystemActionsMapVisitor {
+    type Value = SystemActionsImpl;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("SystemActions Map")
+    }
+
+    fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+    where
+        M: serde::de::MapAccess<'de>,
+    {
+        let mut map = BTreeMap::new();
+
+        while let Some((action, command)) = access.next_entry::<&ron::value::RawValue, String>()? {
+            match action.into_rust::<action::System>() {
+                Ok(val) => {
+                    map.insert(val, command);
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Skipping over invalid SystemAction ({}): {}",
+                        action.get_ron(),
+                        err
+                    );
+                }
+            };
+        }
+
+        Ok(SystemActionsImpl(map))
+    }
+}
+
+impl<'de> Deserialize<'de> for SystemActionsImpl {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::de::Deserializer<'de>,
+    {
+        deserializer.deserialize_map(SystemActionsMapVisitor)
+    }
 }
