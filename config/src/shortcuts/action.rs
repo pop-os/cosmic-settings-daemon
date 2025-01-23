@@ -130,6 +130,12 @@ pub enum Action {
 
     /// Change focus to the given workspace ID
     Workspace(u8),
+
+    /// Enter Magnification / Increase the zoom level by the configured interval
+    ZoomIn,
+
+    /// Leave Magnification / Decrease the zoom level by the configured interval
+    ZoomOut,
 }
 
 /// Common system operations which may be controlled by system commands
