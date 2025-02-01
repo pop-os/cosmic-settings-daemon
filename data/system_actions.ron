@@ -30,7 +30,7 @@
     /// Takes a screenshot
     Screenshot: "cosmic-screenshot",
     /// Opens the system default terminal
-    Terminal: "cosmic-term",
+    Terminal: "x-terminal-emulator",
     /// Lowers the volume of the active output device
     VolumeLower: "amixer sset Master on; amixer sset Master 5%-",
     /// Raises the volume of the active output device
