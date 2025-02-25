@@ -1,3 +1,6 @@
+// Copyright 2023 System76 <info@system76.com>
+// SPDX-License-Identifier: GPL-3.0-only
+
 use brightness_device::BrightnessDevice;
 use logind_session::LogindSessionProxy;
 use notify::{event::ModifyKind, EventKind, Watcher};
@@ -23,6 +26,7 @@ use zbus::{
 };
 mod battery;
 mod brightness_device;
+mod input;
 mod locale;
 mod logind_session;
 mod pipewire;
@@ -129,6 +133,13 @@ impl SettingsDaemon {
                 .unwrap_or(-1)
         } else {
             -1
+        }
+    }
+
+    /// Take the current xkb config and switch the active input source.
+    async fn input_source_switch(&self) {
+        if let Err(why) = input::source_switch() {
+            eprintln!("error switching xkb input source: {why}");
         }
     }
 

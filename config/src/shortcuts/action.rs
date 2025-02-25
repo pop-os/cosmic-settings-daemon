@@ -149,6 +149,8 @@ pub enum System {
     BrightnessUp,
     /// Opens the home folder in a system default file browser
     HomeFolder,
+    /// Switch the currently-active input source
+    InputSourceSwitch,
     /// Decreases keyboard brightness
     KeyboardBrightnessDown,
     /// Increases keyboard brightness
