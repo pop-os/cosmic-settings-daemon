@@ -18,7 +18,7 @@
     /// Locks the screen
     LockScreen: "loginctl lock-session",
     /// Mutes the active output device
-    Mute: "amixer sset Master toggle",
+    Mute: "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     /// Mutes the active microphone
     MuteMic: "amixer sset Capture toggle",
     /// Plays and Pauses audio
@@ -32,9 +32,9 @@
     /// Opens the system default terminal
     Terminal: "cosmic-term",
     /// Lowers the volume of the active output device
-    VolumeLower: "amixer sset Master on; amixer sset Master 5%-",
+    VolumeLower: "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+ -l 1.5",
     /// Raises the volume of the active output device
-    VolumeRaise: "amixer sset Master on; amixer sset Master 5%+",
+    VolumeRaise: "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%- -l 1.5",
     /// Opens the system default web browser
     WebBrowser: "xdg-open http://",
     /// Opens the (alt+tab) window switcher
