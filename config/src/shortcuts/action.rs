@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
+#![allow(deprecated)] // Derives on deprecated variants produce warnings...
 
 use serde::{Deserialize, Serialize};
 
@@ -23,12 +24,14 @@ pub enum Action {
     /// Maximize the active window
     Maximize,
 
+    #[deprecated]
     /// Migrate the active workspace to the next output
     MigrateWorkspaceToNextOutput,
 
     /// Migrate the active workspace to the output in the given direction
     MigrateWorkspaceToOutput(Direction),
 
+    #[deprecated]
     /// Migrate the active workspace to the previous output
     MigrateWorkspaceToPreviousOutput,
 
@@ -41,6 +44,7 @@ pub enum Action {
     /// Move a window to the last workspace
     MoveToLastWorkspace,
 
+    #[deprecated]
     /// Move a window to the next output
     MoveToNextOutput,
 
@@ -50,6 +54,7 @@ pub enum Action {
     /// Move a window to the given output
     MoveToOutput(Direction),
 
+    #[deprecated]
     /// Move a window to the previous output
     MoveToPreviousOutput,
 
@@ -59,6 +64,7 @@ pub enum Action {
     /// Move a window to the given workspace
     MoveToWorkspace(u8),
 
+    #[deprecated]
     /// Change focus to the next output
     NextOutput,
 
@@ -68,6 +74,7 @@ pub enum Action {
     /// Change the orientation of a tiling group
     Orientation(Orientation),
 
+    #[deprecated]
     /// Change focus to the previous output
     PreviousOutput,
 
@@ -80,6 +87,7 @@ pub enum Action {
     /// Move a window to the last workspace
     SendToLastWorkspace,
 
+    #[deprecated]
     /// Move a window to the next output
     SendToNextOutput,
 
@@ -89,6 +97,7 @@ pub enum Action {
     /// Move a window to the output in the given direction
     SendToOutput(Direction),
 
+    #[deprecated]
     /// Move a window to the previous output
     SendToPreviousOutput,
 
