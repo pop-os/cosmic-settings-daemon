@@ -130,10 +130,10 @@ impl Binding {
     /// Get the inferred direction of a xkb key
     pub fn inferred_direction(&self) -> Option<Direction> {
         match self.key? {
-            xkb::Keysym::Left | xkb::Keysym::h | xkb::Keysym::H => Some(Direction::Left),
-            xkb::Keysym::Down | xkb::Keysym::j | xkb::Keysym::J => Some(Direction::Down),
-            xkb::Keysym::Up | xkb::Keysym::k | xkb::Keysym::K => Some(Direction::Up),
-            xkb::Keysym::Right | xkb::Keysym::l | xkb::Keysym::L => Some(Direction::Right),
+            xkb::Keysym::Left => Some(Direction::Left),
+            xkb::Keysym::Down => Some(Direction::Down),
+            xkb::Keysym::Up => Some(Direction::Up),
+            xkb::Keysym::Right => Some(Direction::Right),
             _ => None,
         }
     }
