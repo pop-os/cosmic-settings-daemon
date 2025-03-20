@@ -46,6 +46,7 @@ impl Binding {
     /// Check if the binding has been set
     pub fn is_set(&self) -> bool {
         (self.has_modifier() && self.key.is_some())
+            || self.is_super()
             || self.key.map_or(false, |key| {
                 // Allow Home/End, Print, PageDown/Up, etc.
                 key.is_misc_function_key()
@@ -135,28 +136,27 @@ impl FromStr for Binding {
                 "alt" => binding.modifiers.alt = true,
                 "shift" => binding.modifiers.shift = true,
                 lowercased => {
-                    let name = if token.chars().count() == 1 {
-                        binding.key = Some(Keysym::from_char(lowercased.chars().next().unwrap()));
-                        return Ok(binding);
+                    let key = if token.chars().count() == 1 {
+                        Keysym::from_char(lowercased.chars().next().unwrap())
                     } else {
-                        token
-                    };
-
-                    return match xkb::keysym_from_name(&name, xkb::KEYSYM_NO_FLAGS) {
-                        x if x.raw() == super::sym::NO_SYMBOL => {
-                            Err(format!("'{name}' is not a valid key symbol"))
+                        let key = xkb::keysym_from_name(&token, xkb::KEYSYM_NO_FLAGS);
+                        if key.raw() == super::sym::NO_SYMBOL {
+                            return Err(format!("'{token}' is not a valid key symbol"));
                         }
-
-                        x => {
-                            binding.key = Some(x);
-                            Ok(binding)
-                        }
+                        key
                     };
+                    if let Some(prev_key) = binding.key {
+                        let prev_key = xkb::keysym_get_name(prev_key);
+                        let new_key = xkb::keysym_get_name(key);
+                        return Err(format!(
+                            "Multiple keys were defined for this binding ('{prev_key}' and '{new_key}')"
+                        ));
+                    }
+                    binding.key = Some(key);
                 }
             }
         }
-
-        Err(format!("no key was defined for this binding"))
+        Ok(binding)
     }
 }
 
@@ -214,6 +214,11 @@ mod tests {
                 Modifiers::new().logo(),
                 Some(xkbcommon::xkb::Keysym::space)
             ))
+        );
+
+        assert_eq!(
+            Binding::from_str("Super"),
+            Ok(Binding::new(Modifiers::new().logo(), None))
         );
     }
 }
