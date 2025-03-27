@@ -30,6 +30,7 @@ mod input;
 mod locale;
 mod logind_session;
 mod pipewire;
+mod pulse;
 mod theme;
 
 // Use seperate HasDisplayBrightness, or -1?
@@ -508,6 +509,14 @@ async fn main() -> zbus::Result<()> {
                 }
             });
 
+            let sigterm_rx_clone = sigterm_rx.resubscribe();
+            let (pulse_tx, pulse_rx) = tokio::sync::mpsc::channel(10);
+            task::spawn_local(async move {
+                if let Err(err) = pulse::pulse(sigterm_rx_clone,pulse_rx).await {
+                    eprintln!("Pulse task failed: {err:?}");
+                }
+            });
+
             let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
             task::spawn_local(async move {
                 let mut sleep = Duration::from_millis(100);
@@ -581,6 +590,10 @@ async fn main() -> zbus::Result<()> {
                             {
                                 if let Err(err) = xkb_tx.send(()).await {
                                     eprintln!("Failed to send xkb layout update: {err:?}");
+                                }
+                            } else if id.as_str() == cosmic_settings_daemon_config::NAME {
+                                if let Err(err) = tokio::time::timeout(Duration::from_secs(1), pulse_tx.send(())).await {
+                                    eprintln!("Failed to send cosmic_settings_daemon_config update to pulse: {err:?}");
                                 }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;

@@ -8,6 +8,7 @@ Build-Depends:
   cargo,
   libudev-dev,
   libinput-dev,
+  pulseaudio-utils,
   pkg-config,
 Standards-Version: 4.3.0
 Homepage: https://github.com/pop-os/cosmic-settings-daemon
