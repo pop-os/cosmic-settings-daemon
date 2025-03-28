@@ -11,6 +11,9 @@ members = ["config", "cosmic-settings-daemon-config"]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 
 [dependencies]
+cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", features = [
+    "pulse",
+] }
 anyhow = "1.0.97"
 clap = "4.5.32"
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config" }
@@ -28,9 +31,6 @@ cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
 cosmic-config.workspace = true
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 chrono = "0.4.40"
-cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", features = [
-    "pulse",
-], branch = "sound" }
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 acpid_plug = "0.1.2"
 upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
