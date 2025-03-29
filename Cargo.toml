@@ -43,6 +43,9 @@ futures = "0.3.31"
 ctrlc = { version = "3.4.5", features = ["termination"] }
 xkb-data = "0.2.1"
 
+[profile.release]
+lto = "fat"
+
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
 # libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "fix-gtk-rgba" }
