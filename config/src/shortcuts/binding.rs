@@ -38,6 +38,57 @@ impl Binding {
         }
     }
 
+    /// Creates a key binding from a string, where the non-modifier key is optional.
+    pub fn from_str_partial(value: &str) -> Result<Self, String> {
+        let mut binding = Binding::default();
+
+        for token in value.split('+') {
+            let token = token.trim();
+            match token.to_ascii_lowercase().as_str() {
+                "super" => binding.modifiers.logo = true,
+                "ctrl" => binding.modifiers.ctrl = true,
+                "alt" => binding.modifiers.alt = true,
+                "shift" => binding.modifiers.shift = true,
+                lowercased => {
+                    if binding.key.is_some() {
+                        return Err("only one non-modifier key is allowed".to_string());
+                    }
+
+                    let name = if token.chars().count() == 1 {
+                        binding.key = Some(Keysym::from_char(lowercased.chars().next().unwrap()));
+                        continue;
+                    } else {
+                        token
+                    };
+
+                    // Try case-sensitive lookup first in case of two symbols that only differ in case.
+                    match xkb::keysym_from_name(&name, xkb::KEYSYM_NO_FLAGS) {
+                        x if x.raw() == super::sym::NO_SYMBOL => {
+                            // Fallback to case insensitive lookup.
+                            match xkb::keysym_from_name(&name, xkb::KEYSYM_CASE_INSENSITIVE) {
+                                x_insensitive if x_insensitive.raw() == super::sym::NO_SYMBOL => {
+                                    return Err(format!("'{name}' is not a valid key symbol"))
+                                }
+                                x_insensitive => {
+                                    binding.key = Some(x_insensitive);
+                                }
+                            }
+                        }
+                        x => {
+                            binding.key = Some(x);
+                        }
+                    };
+                }
+            }
+        }
+
+        if !binding.has_modifier() && binding.key.is_none() {
+            return Err("at least one key is required".to_string());
+        }
+
+        Ok(binding)
+    }
+
     /// Check if a modifier was defined
     pub fn has_modifier(&self) -> bool {
         self.modifiers.logo || self.modifiers.shift || self.modifiers.alt || self.modifiers.ctrl
@@ -98,6 +149,16 @@ impl Binding {
             string.remove(string.len() - 1);
         }
     }
+
+    /// Returns `true` if the binding is a subset of another,
+    /// i.e., `other` contains at least all the keys in `self`.
+    pub fn is_subset(&self, other: &Binding) -> bool {
+        (self.modifiers.ctrl & other.modifiers.ctrl == self.modifiers.ctrl)
+            && (self.modifiers.alt & other.modifiers.alt == self.modifiers.alt)
+            && (self.modifiers.shift & other.modifiers.shift == self.modifiers.shift)
+            && (self.modifiers.logo & other.modifiers.logo == self.modifiers.logo)
+            && (self.key.is_none() || self.key == other.key)
+    }
 }
 
 impl PartialEq for Binding {
@@ -125,38 +186,12 @@ impl FromStr for Binding {
     type Err = String;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let mut binding = Binding::default();
-
-        for token in value.split('+') {
-            let token = token.trim();
-            match token.to_ascii_lowercase().as_str() {
-                "super" => binding.modifiers.logo = true,
-                "ctrl" => binding.modifiers.ctrl = true,
-                "alt" => binding.modifiers.alt = true,
-                "shift" => binding.modifiers.shift = true,
-                lowercased => {
-                    let name = if token.chars().count() == 1 {
-                        binding.key = Some(Keysym::from_char(lowercased.chars().next().unwrap()));
-                        return Ok(binding);
-                    } else {
-                        token
-                    };
-
-                    return match xkb::keysym_from_name(&name, xkb::KEYSYM_NO_FLAGS) {
-                        x if x.raw() == super::sym::NO_SYMBOL => {
-                            Err(format!("'{name}' is not a valid key symbol"))
-                        }
-
-                        x => {
-                            binding.key = Some(x);
-                            Ok(binding)
-                        }
-                    };
-                }
-            }
+        let binding = Binding::from_str_partial(value)?;
+        if binding.key.is_none() {
+            return Err(format!("no key was defined for this binding"));
         }
 
-        Err(format!("no key was defined for this binding"))
+        Ok(binding)
     }
 }
 
@@ -215,5 +250,38 @@ mod tests {
                 Some(xkbcommon::xkb::Keysym::space)
             ))
         );
+
+        // Case-insensitive
+        assert_eq!(
+            Binding::from_str("super+up"),
+            Ok(Binding::new(
+                Modifiers::new().logo(),
+                Some(xkbcommon::xkb::Keysym::Up)
+            ))
+        );
+
+        // Must have a non-modifier key.
+        assert!(matches!(Binding::from_str("Super+Shift"), Err(_)));
+
+        // Can't have multiple non-modifier keys.
+        assert!(matches!(Binding::from_str("Super+Up+Down"), Err(_)));
+
+        // At least one key is required.
+        assert!(matches!(Binding::from_str(" "), Err(_)));
+    }
+
+    #[test]
+    fn binding_from_str_partial() {
+        // Non-modifier key not required.
+        assert_eq!(
+            Binding::from_str_partial("Super+Ctrl+Alt"),
+            Ok(Binding::new(Modifiers::new().logo().ctrl().alt(), None,))
+        );
+
+        // Can't have multiple non-modifier keys.
+        assert!(matches!(Binding::from_str("Super+Up+Down"), Err(_)));
+
+        // At least one key is required.
+        assert!(matches!(Binding::from_str(" "), Err(_)));
     }
 }
