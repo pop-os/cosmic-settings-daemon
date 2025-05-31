@@ -31,6 +31,8 @@
     PlayPrev: "playerctl previous",
     /// Takes a screenshot
     Screenshot: "cosmic-screenshot",
+    /// Suspend the system
+    Suspend: "systemctl suspend",
     /// Opens the system default terminal
     Terminal: "cosmic-term",
     /// Lowers the volume of the active output device

@@ -182,6 +182,8 @@ pub enum System {
     PlayPrev,
     /// Takes a screenshot
     Screenshot,
+    /// Suspend the system
+    Suspend,
     /// Opens the system default terminal
     Terminal,
     /// Lowers the volume of the active audio output
