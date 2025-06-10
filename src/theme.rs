@@ -206,15 +206,19 @@ pub async fn watch_theme(
         }
     }
     let conn = zbus::Connection::system().await?;
-    let mgr = geoclue2::ManagerProxy::new(&conn).await?;
-    let client = mgr.get_client().await?;
-    client
-        .set_requested_accuracy_level(Accuracy::Exact as u32)
-        .await?;
-    client.set_desktop_id(DBUS_NAME).await?;
     // TODO allow preference for config file instead?
-    let mut location_updates = Some(client.receive_location_updated().await?);
-    client.start().await?;
+    let mut location_updates = async {
+        let mgr = geoclue2::ManagerProxy::new(&conn).await?;
+        let client = mgr.get_client().await?;
+        client.set_requested_accuracy_level(Accuracy::Exact as u32).await?;
+        client.set_desktop_id(DBUS_NAME).await?;
+        let updates = client.receive_location_updated().await?;
+        client.start().await?;
+        Ok::<_,anyhow::Error>(Some(updates))
+    }.await.unwrap_or_else(|err| {
+        eprintln!("Failed to subscribe to GeoClue location updates. {err:?}");
+        None
+    });
 
     let mut sunrise_sunset: Option<SunriseSunset> = None;
     loop {
