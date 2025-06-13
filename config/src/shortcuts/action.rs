@@ -180,6 +180,8 @@ pub enum System {
     PlayNext,
     /// Goes to the previous track
     PlayPrev,
+    /// Power off button handler
+    PowerOff,
     /// Takes a screenshot
     Screenshot,
     /// Opens the system default terminal

@@ -29,6 +29,8 @@
     PlayNext: "playerctl next",
     /// Goes to the previous track
     PlayPrev: "playerctl previous",
+    /// Power off handler
+    PowerOff: "cosmic-osd shutdown",
     /// Takes a screenshot
     Screenshot: "cosmic-screenshot",
     /// Opens the system default terminal
