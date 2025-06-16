@@ -142,7 +142,7 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
 
                         }
 
-                        percent if percent == 100.0 => {
+                        100.0 => {
                             current_battery = BatteryLevel::Full;
                             crate::pipewire::play_sound("Pop", "battery-full");
                         }

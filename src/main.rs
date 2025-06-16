@@ -29,6 +29,7 @@ mod battery;
 mod brightness_device;
 mod input;
 mod locale;
+mod location;
 mod logind_session;
 mod pipewire;
 mod pulse;
@@ -40,7 +41,6 @@ mod theme;
 // Scale brightness to 0 to 100? Or something else? Float?
 
 pub static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
-const GEOCLUE_AGENT: Option<&'static str> = option_env!("GEOCLUE_AGENT");
 
 static DBUS_NAME: &str = "com.system76.CosmicSettingsDaemon";
 static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
@@ -362,14 +362,6 @@ async fn main() -> zbus::Result<()> {
         sigterm_tx.send(()).unwrap();
     })
     .expect("Error setting sigterm handler");
-
-    // Try to start Geoclue agent
-    if let Err(err) =
-        std::process::Command::new(GEOCLUE_AGENT.unwrap_or("/usr/libexec/geoclue-2.0/demos/agent"))
-            .spawn()
-    {
-        eprintln!("Failed to start Geoclue agent: {err}");
-    }
 
     task::LocalSet::new()
         .run_until(async move {

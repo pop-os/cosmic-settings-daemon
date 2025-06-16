@@ -7,16 +7,15 @@ use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::bail;
-use chrono::{DateTime, Datelike, Days, Local};
+use chrono::{DateTime, Days, Local};
 use cosmic::{config::CosmicTk, theme::CosmicTheme};
 use cosmic_config::CosmicConfigEntry;
 use cosmic_theme::{Theme, ThemeMode};
-use geoclue2::{Accuracy, LocationProxy};
 
+use geonames::GeoPosition;
+use sunrise::{Coordinates, SolarDay, SolarEvent};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
-
-use crate::DBUS_NAME;
 
 #[derive(Debug)]
 pub struct SunriseSunset {
@@ -25,8 +24,6 @@ pub struct SunriseSunset {
     sunset: Instant,
     lat: f64,
     long: f64,
-    /// accuracy in meters
-    accuracy: f64,
 }
 
 pub enum ThemeMsg {
@@ -41,7 +38,6 @@ impl SunriseSunset {
         lat: f64,
         long: f64,
         t: Option<DateTime<Local>>,
-        accuracy: f64,
     ) -> anyhow::Result<Self> {
         let (system_t, instant_t, t) = if let Some(t) = t {
             let system_t = SystemTime::from(t);
@@ -55,10 +51,12 @@ impl SunriseSunset {
         } else {
             (SystemTime::now(), Instant::now(), Local::now())
         };
-        let year = t.year();
-        let month = t.month();
-        let day = t.day();
-        let (sunrise, sunset) = sunrise::sunrise_sunset(lat, long, year, month, day);
+
+        let naive_date = t.date_naive();
+        let coords = Coordinates::new(lat, long).unwrap();
+        let solar_day = SolarDay::new(coords, naive_date);
+        let sunrise = solar_day.event_time(SolarEvent::Sunrise).timestamp();
+        let sunset = solar_day.event_time(SolarEvent::Sunset).timestamp();
 
         let Some(sunrise) =
             UNIX_EPOCH.checked_add(std::time::Duration::from_secs(u64::try_from(sunrise)?))
@@ -90,7 +88,6 @@ impl SunriseSunset {
             sunset: st_to_instant(system_t, sunset)?,
             lat,
             long,
-            accuracy,
         })
     }
 
@@ -121,7 +118,7 @@ impl SunriseSunset {
                 let Some(tomorrow) = self.last_update.checked_add_days(Days::new(1)) else {
                     bail!("Failed to calculate next date for theme auto-switch.");
                 };
-                *self = Self::new(self.lat, self.long, Some(tomorrow), self.accuracy)?;
+                *self = Self::new(self.lat, self.long, Some(tomorrow))?;
                 self.next()
             }
         }
@@ -205,16 +202,12 @@ pub async fn watch_theme(
             eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
         }
     }
-    let conn = zbus::Connection::system().await?;
-    let mgr = geoclue2::ManagerProxy::new(&conn).await?;
-    let client = mgr.get_client().await?;
-    client
-        .set_requested_accuracy_level(Accuracy::Exact as u32)
-        .await?;
-    client.set_desktop_id(DBUS_NAME).await?;
+
     // TODO allow preference for config file instead?
-    let mut location_updates = Some(client.receive_location_updated().await?);
-    client.start().await?;
+    let geodata = crate::location::decode_geodata();
+    let location_updates = crate::location::receive_timezones();
+    futures::pin_mut!(location_updates);
+    let mut location_updates = Some(location_updates);
 
     let mut sunrise_sunset: Option<SunriseSunset> = None;
     loop {
@@ -443,27 +436,19 @@ pub async fn watch_theme(
                 }
                 // set the next timer
                 // update the theme if necessary
-                let Some(location_update) = location_update else {
+                let Some(location_result) = location_update else {
                     bail!("No location in the update");
                 };
-                let args = location_update.args()?;
-                let new = LocationProxy::builder(&conn)
-                    .path(args.new())?
-                    .build()
-                    .await?;
-                let accuracy = new.accuracy().await?;
 
-                // XXX sometimes location updates seem to be extremely inaccurate
-                // Probably they are updates with the approximate location of the country?
-                if let Some(s) = sunrise_sunset.as_ref() {
-                    if s.accuracy * 10.0 < accuracy {
-                        continue;
-                    }
-                }
+                let Ok(new_timezone) = location_result else {
+                    continue;
+                };
 
-                let latitude = new.latitude().await?;
-                let longitude = new.longitude().await?;
-                match SunriseSunset::new(latitude, longitude, None, accuracy) {
+                let Some(&GeoPosition { latitude, longitude }) = geodata.get(&new_timezone) else {
+                    continue;
+                };
+
+                match SunriseSunset::new(latitude, longitude, None) {
                     Ok(s) => {
                         sunrise_sunset = Some(s);
                     },
