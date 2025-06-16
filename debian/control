@@ -8,6 +8,7 @@ Build-Depends:
   cargo,
   libudev-dev,
   libinput-dev,
+  libssl-dev,
   libxkbcommon-dev,
   pulseaudio-utils,
   pkg-config,
@@ -23,6 +24,5 @@ Depends:
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
-  geoclue-2.0,
   playerctl,
 Description: Cosmic settings daemon

@@ -31,7 +31,7 @@ distclean: clean
 	rm -rf .cargo vendor vendor.tar
 
 $(BIN): Cargo.toml Cargo.lock src/main.rs vendor-check
-	GEOCLUE_AGENT=${geoclue_agent} cargo build $(ARGS) --bin ${BIN}
+	cargo build $(ARGS) --bin ${BIN}
 
 install:
 	install -Dm0755 "$(CARGO_TARGET_DIR)/$(TARGET)/$(BIN)" "$(DESTDIR)$(bindir)/$(BIN)"

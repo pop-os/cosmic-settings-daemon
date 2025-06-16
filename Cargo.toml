@@ -5,7 +5,7 @@ edition = "2021"
 license = "GPL-3.0-or-later"
 
 [workspace]
-members = ["config", "cosmic-settings-daemon-config"]
+members = ["config", "cosmic-settings-daemon-config", "geonames"]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
@@ -17,14 +17,13 @@ cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settin
 anyhow = "1.0.97"
 clap = "4.5.32"
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config" }
-dirs = "5.0.1"
-notify = "6.1.1"
+dirs = "6.0.0"
+notify = "8.0.0"
 tokio = { version = "1.44.1", features = ["macros", "net", "rt"] }
-udev = "0.8.0"
+udev = "0.9.3"
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.17"
-sunrise = "1.2.1"
-geoclue2 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+sunrise = "2.1.0"
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
     "export",
 ] }
@@ -37,11 +36,12 @@ upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 notify-rust = "4.11.5"
 walkdir = "2.5.0"
-memoize = "0.4.2"
+memoize = "0.5.1"
 futures-util = "0.3.31"
 futures = "0.3.31"
 ctrlc = { version = "3.4.5", features = ["termination"] }
 xkb-data = "0.2.1"
+geonames = { path = "geonames" }
 
 [patch.crates-io]
 smithay-client-toolkit = { git = "https://github.com/smithay/client-toolkit" }
