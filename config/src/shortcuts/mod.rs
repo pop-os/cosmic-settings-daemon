@@ -5,10 +5,13 @@ pub use action::Action;
 
 pub mod modifier;
 
+use action::{Direction, FingerCount};
 pub use modifier::{Modifier, Modifiers, ModifiersDef};
 
 mod binding;
+mod gesture;
 pub use binding::Binding;
+pub use gesture::Gesture;
 
 pub mod sym;
 
@@ -49,6 +52,33 @@ pub fn shortcuts(context: &cosmic_config::Config) -> Shortcuts {
     shortcuts
 }
 
+/// Get the current system gesture configuration
+///
+/// Merges user-defined custom gestures to the system default config
+pub fn gestures(context: &cosmic_config::Config) -> Gestures {
+    // Load gestures defined by the system.
+    let mut gestures = context
+        .get::<Gestures>("default_gestures")
+        .unwrap_or_else(|why| {
+            if why.is_err() {
+                tracing::error!("shortcuts defaults config error: {why:?}");
+            }
+            Gestures::default()
+        });
+
+    // Load custom gestures defined by the user.
+    let custom_gestures = context
+        .get::<Gestures>("custom_gestures")
+        .unwrap_or_else(|why| {
+            tracing::error!("shortcuts custom config error: {why:?}");
+            Gestures::default()
+        });
+
+    // Combine while overriding system gestures.
+    gestures.0.extend(custom_gestures.0);
+    gestures
+}
+
 /// Get a map of system actions and their configured commands
 pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
     let mut config = SystemActions::default();
@@ -80,6 +110,8 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
 pub struct Config {
     pub defaults: Shortcuts,
     pub custom: Shortcuts,
+    pub default_gestures: Gestures,
+    pub custom_gestures: Gestures,
     pub system_actions: SystemActions,
 }
 
@@ -96,6 +128,18 @@ impl Config {
         self.custom
             .shortcut_for_action(action)
             .or_else(|| self.defaults.shortcut_for_action(action))
+    }
+
+    pub fn gestures(&self) -> impl Iterator<Item = (&Gesture, &Action)> {
+        self.custom_gestures
+            .iter()
+            .chain(self.default_gestures.iter())
+    }
+
+    pub fn gesture_for_action(&self, action: &Action) -> Option<String> {
+        self.custom_gestures
+            .gesture_for_action(action)
+            .or_else(|| self.default_gestures.gesture_for_action(action))
     }
 }
 
@@ -259,5 +303,51 @@ impl<'de> Deserialize<'de> for SystemActionsImpl {
         D: serde::de::Deserializer<'de>,
     {
         deserializer.deserialize_map(SystemActionsMapVisitor)
+    }
+}
+
+/// A map of defined [Gesture]s and their triggerable [Action]s
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
+#[serde(transparent)]
+pub struct Gestures(pub BTreeMap<Gesture, Action>);
+
+impl Gestures {
+    pub fn insert_default_gesture(
+        &mut self,
+        fingers: FingerCount,
+        direction: Direction,
+        action: Action,
+    ) {
+        if !self.0.values().any(|a| a == &action) {
+            let pattern = Gesture {
+                description: None,
+                fingers,
+                direction,
+            };
+            if !self.0.contains_key(&pattern) {
+                self.0.insert(pattern, action.clone());
+            }
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&Gesture, &Action)> {
+        self.0.iter()
+    }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = (&Gesture, &mut Action)> {
+        self.0.iter_mut()
+    }
+
+    pub fn gesture_for_action(&self, action: &Action) -> Option<String> {
+        self.gestures(action)
+            .next() // take the first one
+            .map(|gesture| gesture.to_string())
+    }
+
+    pub fn gestures<'a>(&'a self, action: &'a Action) -> impl Iterator<Item = &'a Gesture> {
+        self.0
+            .iter()
+            .filter(move |(_, a)| *a == action)
+            .map(|(b, _)| b)
     }
 }
