@@ -1,6 +1,8 @@
 use geonames::GeoPosition;
 use std::{
-    collections::BTreeMap, fs, io::{self, BufRead}
+    collections::BTreeMap,
+    fs,
+    io::{self, BufRead},
 };
 
 #[tokio::main]
@@ -81,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(_modification_date) = parts.next() else {
             continue;
         };
-        
+
         let geoposition = GeoPosition {
             latitude: latitude.parse()?,
             longitude: longitude.parse()?,

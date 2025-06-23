@@ -544,7 +544,7 @@ async fn main() -> zbus::Result<()> {
             });
 
             let conn_clone = connection.clone();
-            task::spawn_local(async move {
+            task::spawn(async move {
                 while let Some(changes) = rx.recv().await {
                     let Ok(settings_daemon) = conn_clone
                         .object_server()

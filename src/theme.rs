@@ -34,11 +34,7 @@ pub enum ThemeMsg {
 }
 
 impl SunriseSunset {
-    pub fn new(
-        lat: f64,
-        long: f64,
-        t: Option<DateTime<Local>>,
-    ) -> anyhow::Result<Self> {
+    pub fn new(lat: f64, long: f64, t: Option<DateTime<Local>>) -> anyhow::Result<Self> {
         let (system_t, instant_t, t) = if let Some(t) = t {
             let system_t = SystemTime::from(t);
             let system_now = SystemTime::now();
@@ -437,7 +433,7 @@ pub async fn watch_theme(
                 // set the next timer
                 // update the theme if necessary
                 let Some(location_result) = location_update else {
-                    bail!("No location in the update");
+                    continue;
                 };
 
                 let Ok(new_timezone) = location_result else {

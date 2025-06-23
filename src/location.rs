@@ -19,12 +19,18 @@ pub fn decode_geodata() -> BTreeMap<String, GeoPosition> {
 pub fn receive_timezones() -> impl Stream<Item = io::Result<String>> {
     let (tx, rx) = tokio::sync::mpsc::channel(1);
     let mut watcher = notify::recommended_watcher(move |result: notify::Result<notify::Event>| {
-        if matches!(result.map(|event| event.kind), Ok(notify::EventKind::Modify(notify::event::ModifyKind::Data(_)))) {
+        if matches!(
+            result.map(|event| event.kind),
+            Ok(notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                _
+            )))
+        ) {
             futures::executor::block_on(async {
                 _ = tx.send(()).await;
             })
         }
-    }).unwrap();
+    })
+    .unwrap();
 
     let timezone_path = Rc::from(Path::new("/etc/timezone").canonicalize().unwrap());
 
