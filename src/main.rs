@@ -476,6 +476,7 @@ async fn main() -> zbus::Result<()> {
 
             let conn_clone = connection.clone();
             let (ready_oneshot_tx, mut ready_oneshot_rx) = tokio::sync::oneshot::channel();
+            /*
             task::spawn_local(async move {
                 if let Err(err) = watch_config_message_stream(
                     conn_clone,
@@ -488,6 +489,7 @@ async fn main() -> zbus::Result<()> {
                     eprintln!("Failed to watch config message stream: {}", err);
                 }
             });
+            */
 
             let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
             task::spawn_local(async move {
