@@ -3,7 +3,8 @@
 
 use brightness_device::BrightnessDevice;
 use logind_session::LogindSessionProxy;
-use notify::{event::ModifyKind, EventKind, Watcher};
+use notify::{event::ModifyKind, EventKind};
+use notify_debouncer_full::DebouncedEvent;
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 use std::{
@@ -391,10 +392,12 @@ async fn main() -> zbus::Result<()> {
                 .or_else(|| dirs::home_dir().map(|p| p.join(".local/state/cosmic")));
             let xdg_config_clone = xdg_config.clone();
             let xdg_state_clone = xdg_state.clone();
+
             let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-            let mut watcher =
-                notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-                    if let Ok(event) = res {
+            let mut notify_debouncer = notify_debouncer_full::new_debouncer(Duration::from_secs(1), None, move |result: Result<Vec<DebouncedEvent>, Vec<notify::Error>>| {
+                if let Ok(events) = result {
+                    for debounced_event in events {
+                        let event: notify::Event = debounced_event.event;
                         match &event.kind {
                             EventKind::Access(_) | EventKind::Modify(ModifyKind::Metadata(_)) => {
                                 // Data not mutated
@@ -452,16 +455,17 @@ async fn main() -> zbus::Result<()> {
                             eprintln!("Failed to send config change: {}", err);
                         }
                     }
-                })
-                .expect("Failed to create notify watcher");
+                }
+            })
+            .expect("failed to create cosmic-config notify watcher");            
 
             if let Some(xdg_config) = xdg_config {
-                if let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
+                if let Err(err) = notify_debouncer.watch(&xdg_config, notify::RecursiveMode::Recursive) {
                     eprintln!("Failed to watch xdg config dir: {}", err);
                 }
             }
             if let Some(xdg_state) = xdg_state {
-                if let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive) {
+                if let Err(err) = notify_debouncer.watch(&xdg_state, notify::RecursiveMode::Recursive) {
                     eprintln!("Failed to watch xdg state dir: {}", err);
                 }
             }
