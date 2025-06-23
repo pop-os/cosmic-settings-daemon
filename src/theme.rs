@@ -203,7 +203,6 @@ pub async fn watch_theme(
     let geodata = crate::location::decode_geodata();
     let location_updates = crate::location::receive_timezones();
     futures::pin_mut!(location_updates);
-    let mut location_updates = Some(location_updates);
 
     let mut sunrise_sunset: Option<SunriseSunset> = None;
     loop {
@@ -213,14 +212,6 @@ pub async fn watch_theme(
             } else {
                 None
             };
-
-        let location_update = async {
-            if let Some(location_updates) = location_updates.as_mut() {
-                location_updates.next().await
-            } else {
-                std::future::pending().await
-            }
-        };
 
         let sleep = async move {
             if !theme_mode.auto_switch {
@@ -426,7 +417,7 @@ pub async fn watch_theme(
                     set_gnome_desktop_interface(theme_mode.is_dark);
                 }
             }
-            location_update = location_update => {
+            location_update = location_updates.next() => {
                 if override_until_next {
                     continue;
                 }
