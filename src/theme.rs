@@ -201,7 +201,7 @@ pub async fn watch_theme(
 
     // TODO allow preference for config file instead?
     let geodata = crate::location::decode_geodata();
-    let location_updates = crate::location::receive_timezones();
+    let (_location_handle, location_updates) = crate::location::receive_timezones();
     futures::pin_mut!(location_updates);
 
     let mut sunrise_sunset: Option<SunriseSunset> = None;
