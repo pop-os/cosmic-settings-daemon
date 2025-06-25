@@ -24,6 +24,9 @@ pub enum Action {
     /// Maximize the active window
     Maximize,
 
+    /// Sets the active window to fullscreen
+    Fullscreen,
+
     #[deprecated]
     /// Migrate the active workspace to the next output
     MigrateWorkspaceToNextOutput,
