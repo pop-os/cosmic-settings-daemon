@@ -12,7 +12,7 @@ cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 
 [dependencies]
 cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", features = [
-    "pulse",
+  "pulse",
 ] }
 anyhow = "1.0.97"
 clap = "4.5.32"
@@ -25,7 +25,7 @@ zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.17"
 sunrise = "2.1.0"
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
-    "export",
+  "export",
 ] }
 cosmic-config.workspace = true
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
@@ -42,6 +42,16 @@ futures = "0.3.31"
 ctrlc = { version = "3.4.5", features = ["termination"] }
 xkb-data = "0.2.1"
 geonames = { path = "geonames" }
+tracing = "0.1.41"
+tracing-journald = "0.3.1"
+tracing-subscriber = { version = "0.3.19", default-features = false, features = [
+  "std",
+  "env-filter",
+  "registry",
+  "fmt",
+  "env-filter",
+  "ansi",
+] }
 
 [patch.crates-io]
 smithay-client-toolkit = { git = "https://github.com/smithay/client-toolkit" }
