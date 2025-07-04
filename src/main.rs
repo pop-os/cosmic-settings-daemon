@@ -480,12 +480,8 @@ async fn main() -> zbus::Result<()> {
                 .build()
                 .await?;
 
-            let conn_clone = connection.clone();
-            task::spawn_local(async move {
-                backlight_monitor_task(backlights, conn_clone).await;
-            });
-
-            tokio::task::spawn_local(battery::monitor());
+            task::spawn_local(backlight_monitor_task(backlights, connection.clone()));
+            task::spawn_local(battery::monitor());
 
             let conn_clone = connection.clone();
             let (ready_oneshot_tx, mut ready_oneshot_rx) = tokio::sync::oneshot::channel();
@@ -544,7 +540,7 @@ async fn main() -> zbus::Result<()> {
             });
 
             let conn_clone = connection.clone();
-            task::spawn(async move {
+            task::spawn_local(async move {
                 while let Some(changes) = rx.recv().await {
                     let Ok(settings_daemon) = conn_clone
                         .object_server()
