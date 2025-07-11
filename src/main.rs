@@ -19,6 +19,7 @@ use tokio::{
     task,
 };
 use tokio_stream::StreamExt;
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use zbus::{
     names::{MemberName, UniqueName, WellKnownName},
     object_server::SignalEmitter,
@@ -355,6 +356,7 @@ pub enum Change {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> zbus::Result<()> {
+    init_logger();
     let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
     let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
 
@@ -736,4 +738,22 @@ async fn watch_config_message_stream(
     }
 
     Ok(())
+}
+
+fn init_logger() {
+    let fmt_layer = fmt::layer().with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("warn"))
+        .unwrap();
+    if let Ok(journal_layer) = tracing_journald::layer() {
+        tracing_subscriber::registry()
+            .with(journal_layer)
+            .with(filter_layer)
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(fmt_layer)
+            .with(filter_layer)
+            .init();
+    }
 }
