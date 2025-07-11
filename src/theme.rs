@@ -123,11 +123,9 @@ impl SunriseSunset {
 
 pub async fn watch_theme(
     theme_mode_rx: &mut tokio::sync::mpsc::Receiver<ThemeMsg>,
-    ready_oneshot: tokio::sync::oneshot::Receiver<()>,
     cleanup_tx: tokio::sync::mpsc::Sender<()>,
     mut sigterm_rx: tokio::sync::broadcast::Receiver<()>,
 ) -> anyhow::Result<()> {
-    ready_oneshot.await?;
     let mut override_until_next = false;
 
     let helper = ThemeMode::config()?;
@@ -231,14 +229,12 @@ pub async fn watch_theme(
                 cleanup_tx.send(()).await.unwrap();
             }
             changes = theme_mode_rx.recv() => {
-
                 let Some(changes) = changes else {
                     bail!("Theme mode changes failed");
                 };
 
                 match changes {
                     ThemeMsg::ThemeMode(changes) => {
-                        let auto_switch_prev = theme_mode.auto_switch;
                         let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
 
                         for err in errs {
@@ -251,9 +247,7 @@ pub async fn watch_theme(
                             override_until_next = false;
                         }
 
-
-                        // need to set the theme right away
-                        if theme_mode.auto_switch && !auto_switch_prev {
+                        if theme_mode.auto_switch {
                             let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
                                 continue;
                             };
@@ -262,6 +256,7 @@ pub async fn watch_theme(
                                 eprintln!("Failed to update theme mode {err:?}");
                             }
                         }
+
                         if tk.apply_theme_global {
                             let theme = match if theme_mode.is_dark {
                                 Theme::get_entry(&dark_helper)
@@ -432,6 +427,7 @@ pub async fn watch_theme(
                 };
 
                 let Some(&GeoPosition { latitude, longitude }) = geodata.get(&new_timezone) else {
+                    eprintln!("no matching geodata for {new_timezone}");
                     continue;
                 };
 
