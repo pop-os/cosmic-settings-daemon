@@ -235,6 +235,8 @@ pub async fn watch_theme(
 
                 match changes {
                     ThemeMsg::ThemeMode(changes) => {
+                        let auto_switch_prev = theme_mode.auto_switch;
+
                         let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
 
                         for err in errs {
@@ -247,7 +249,7 @@ pub async fn watch_theme(
                             override_until_next = false;
                         }
 
-                        if theme_mode.auto_switch {
+                        if theme_mode.auto_switch && !auto_switch_prev {
                             let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
                                 continue;
                             };
