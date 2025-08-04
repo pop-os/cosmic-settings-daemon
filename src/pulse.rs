@@ -101,7 +101,7 @@ pub(crate) async fn pulse(
                 Ok(v) => v,
                 Err(err) => {
                     retry += 1;
-                    eprintln!("{err:?}");
+                    log::error!("{err:?}");
                     continue;
                 }
             };
@@ -111,13 +111,13 @@ pub(crate) async fn pulse(
                 if config.mono_sound {
                     if let Err(err) = cur_state.enable_mono(&state.default_sink_name).await {
                         retry += 1;
-                        eprintln!("Failed to enable mono sound: {err:?}");
+                        log::error!("Failed to enable mono sound: {err:?}");
                         continue;
                     }
                 } else {
                     if let Err(err) = cur_state.disable_mono(&state.default_sink_name).await {
                         retry += 1;
-                        eprintln!("Failed to disable mono sound: {err:?}");
+                        log::error!("Failed to disable mono sound: {err:?}");
                         continue;
                     }
                 }
@@ -125,7 +125,7 @@ pub(crate) async fn pulse(
             } else if sink_change {
                 if let Err(err) = cur_state.sink_change(&state.default_sink_name).await {
                     retry += 1;
-                    eprintln!("Failed to handle sink change: {err:?}");
+                    log::error!("Failed to handle sink change: {err:?}");
                     continue;
                 }
                 sink_change = false;
@@ -146,7 +146,7 @@ pub(crate) async fn pulse(
                         config = c;
                     }
                     Err(err) => {
-                        eprintln!("Failed to load daemon config: {err:?}");
+                        log::error!("Failed to load daemon config: {err:?}");
                         retry += 1;
                         continue;
                     }
@@ -160,7 +160,7 @@ pub(crate) async fn pulse(
                     pulse::Event::DefaultSink(name) => {
                         if name != VIRT_MONO {
                             if let Err(err) = state.set_default_sink_name(&state_helper, name) {
-                                eprintln!("{err:?}");
+                                log::error!("{err:?}");
                             }
                             sink_change = true;
                         }
@@ -184,7 +184,7 @@ pub(crate) async fn pulse(
         retry = 0;
     }
     if let Err(_) = tokio::time::timeout(Duration::from_secs(10), kill_rx).await {
-        eprintln!("Pulse thread did not exit...");
+        log::error!("Pulse thread did not exit...");
         std::process::exit(1);
     }
     Ok(())

@@ -24,7 +24,7 @@ pub fn source_switch() -> anyhow::Result<()> {
 
     let mut xkb = config.get(XKB_CONFIG_KEY).unwrap_or_else(|why| {
         if why.is_err() {
-            eprintln!("failed to read config '{}': {}", XKB_CONFIG_KEY, why);
+            log::error!("failed to read config '{}': {}", XKB_CONFIG_KEY, why);
         }
 
         XkbConfig::default()

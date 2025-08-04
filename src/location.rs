@@ -11,7 +11,7 @@ pub fn decode_geodata() -> BTreeMap<String, GeoPosition> {
     match geonames::bitcode::decode(GEODATA) {
         Ok(ok) => ok,
         Err(err) => {
-            eprintln!("failed to decode timezone geodata: {}", err.to_string());
+            log::error!("failed to decode timezone geodata: {}", err.to_string());
             BTreeMap::new()
         }
     }

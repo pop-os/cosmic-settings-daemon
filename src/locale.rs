@@ -54,7 +54,7 @@ pub async fn sync_locale1(mut rx: Receiver<()>) -> anyhow::Result<()> {
             _ = variant_stream.next() => sync_locale1_to_cosmic(&config, &proxy).await,
             _ = options_stream.next() => sync_locale1_to_cosmic(&config, &proxy).await,
         } {
-            eprintln!("Failed to sync xkb_config with systemd-localed: {}", err);
+            log::error!("Failed to sync xkb_config with systemd-localed: {}", err);
         };
     }
 }
