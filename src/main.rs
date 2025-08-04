@@ -141,7 +141,7 @@ impl SettingsDaemon {
     /// Take the current xkb config and switch the active input source.
     async fn input_source_switch(&self) {
         if let Err(why) = input::source_switch() {
-            eprintln!("error switching xkb input source: {why}");
+            log::error!("error switching xkb input source: {why}");
         }
     }
 
@@ -283,7 +283,7 @@ async fn choose_best_backlight(
                         best_backlight = Some(brightness_device);
                     }
                 }
-                Err(err) => eprintln!("Failed to read max brightness: {}", err),
+                Err(err) => log::error!("Failed to read max brightness: {}", err),
             }
         }
     }
@@ -307,7 +307,7 @@ async fn backlight_monitor_task(
             loop {
                 let mut socket = socket.writable_mut().await.unwrap(); // XXX
                 for evt in socket.get_inner().iter() {
-                    eprintln!(
+                    log::info!(
                         "Backlight '{:?}' event on {}",
                         evt.event_type(),
                         evt.device().syspath().display()
@@ -346,7 +346,7 @@ async fn backlight_monitor_task(
                 socket.clear_ready();
             }
         }
-        Err(err) => eprintln!("Error creating udev backlight monitor: {}", err),
+        Err(err) => log::error!("Error creating udev backlight monitor: {}", err),
     };
 }
 
@@ -359,6 +359,8 @@ pub enum Change {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> zbus::Result<()> {
+    env_logger::init();
+
     let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
     let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
 
@@ -372,7 +374,7 @@ async fn main() -> zbus::Result<()> {
             let backlights = match backlight_enumerate() {
                 Ok(backlights) => backlights,
                 Err(err) => {
-                    eprintln!("Failed to enumerate backlights: {}", err);
+                    log::error!("Failed to enumerate backlights: {}", err);
                     Vec::new()
                 }
             };
@@ -453,7 +455,7 @@ async fn main() -> zbus::Result<()> {
                             })
                             .collect();
                         if let Err(err) = tx.send(msgs) {
-                            eprintln!("Failed to send config change: {}", err);
+                            log::error!("Failed to send config change: {}", err);
                         }
                     }
                 })
@@ -461,12 +463,12 @@ async fn main() -> zbus::Result<()> {
 
             if let Some(xdg_config) = xdg_config {
                 if let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
-                    eprintln!("Failed to watch xdg config dir: {}", err);
+                    log::error!("Failed to watch xdg config dir: {}", err);
                 }
             }
             if let Some(xdg_state) = xdg_state {
                 if let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive) {
-                    eprintln!("Failed to watch xdg state dir: {}", err);
+                    log::error!("Failed to watch xdg state dir: {}", err);
                 }
             }
             let watched_configs = Arc::new(RwLock::new(HashMap::new()));
@@ -500,7 +502,7 @@ async fn main() -> zbus::Result<()> {
                 )
                 .await
                 {
-                    eprintln!("Failed to watch config message stream: {}", err);
+                    log::error!("Failed to watch config message stream: {}", err);
                 }
             });
 
@@ -508,7 +510,7 @@ async fn main() -> zbus::Result<()> {
             let (pulse_tx, pulse_rx) = tokio::sync::mpsc::channel(10);
             task::spawn_local(async move {
                 if let Err(err) = pulse::pulse(sigterm_rx_clone,pulse_rx).await {
-                    eprintln!("Pulse task failed: {err:?}");
+                    log::error!("Pulse task failed: {err:?}");
                 }
             });
 
@@ -524,7 +526,7 @@ async fn main() -> zbus::Result<()> {
                     )
                     .await
                     {
-                        eprintln!(
+                        log::error!(
                             "Failed to watch theme {err:?}. Will try again in {}s",
                             sleep.as_secs()
                         );
@@ -537,7 +539,7 @@ async fn main() -> zbus::Result<()> {
             let (xkb_tx, xkb_rx) = tokio::sync::mpsc::channel(10);
             task::spawn_local(async move {
                 if let Err(err) = locale::sync_locale1(xkb_rx).await {
-                    eprintln!("Failed to watch for systemd-localed changes: {}", err);
+                    log::error!("Failed to watch for systemd-localed changes: {}", err);
                 }
             });
 
@@ -558,33 +560,33 @@ async fn main() -> zbus::Result<()> {
                                 if let Err(err) =
                                     theme_tx.send(theme::ThemeMsg::ThemeMode(key.clone())).await
                                 {
-                                    eprintln!("Failed to send theme mode update {err:?}");
+                                    log::error!("Failed to send theme mode update {err:?}");
                                 }
                             } else if id.as_str() == cosmic::config::ID {
                                 if let Err(err) =
                                     theme_tx.send(theme::ThemeMsg::Tk(key.clone())).await
                                 {
-                                    eprintln!("Failed to send theme toolkit update {err:?}");
+                                    log::error!("Failed to send theme toolkit update {err:?}");
                                 }
                             } else if id.as_str() == cosmic_theme::DARK_THEME_ID {
                                 if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(true)).await
                                 {
-                                    eprintln!("Failed to send dark theme update {err:?}");
+                                    log::error!("Failed to send dark theme update {err:?}");
                                 }
                             } else if id.as_str() == cosmic_theme::LIGHT_THEME_ID {
                                 if let Err(err) = theme_tx.send(theme::ThemeMsg::Theme(false)).await
                                 {
-                                    eprintln!("Failed to send dark theme update {err:?}");
+                                    log::error!("Failed to send dark theme update {err:?}");
                                 }
                             } else if id.as_str() == locale::COSMIC_COMP_ID
                                 && key.as_str() == locale::COSMIC_COMP_XDG_KEY
                             {
                                 if let Err(err) = xkb_tx.send(()).await {
-                                    eprintln!("Failed to send xkb layout update: {err:?}");
+                                    log::error!("Failed to send xkb layout update: {err:?}");
                                 }
                             } else if id.as_str() == cosmic_settings_daemon_config::NAME {
                                 if let Err(err) = tokio::time::timeout(Duration::from_secs(1), pulse_tx.send(())).await {
-                                    eprintln!("Failed to send cosmic_settings_daemon_config update to pulse: {err:?}");
+                                    log::error!("Failed to send cosmic_settings_daemon_config update to pulse: {err:?}");
                                 }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;
@@ -605,7 +607,7 @@ async fn main() -> zbus::Result<()> {
                             )
                             .await
                             {
-                                eprintln!("Failed to send config changed signal: {}", err);
+                                log::error!("Failed to send config changed signal: {}", err);
                             }
                         } else if let Change::State(id, key, version) = c {
                             let read_guard = settings_daemon.watched_states.read().await;
@@ -626,7 +628,7 @@ async fn main() -> zbus::Result<()> {
                             )
                             .await
                             {
-                                eprintln!("Failed to send state changed signal: {}", err);
+                                log::error!("Failed to send state changed signal: {}", err);
                             }
                         }
                     }

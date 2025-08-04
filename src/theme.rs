@@ -133,7 +133,7 @@ pub async fn watch_theme(
         Ok(t) => t,
         Err((errs, t)) => {
             for why in errs {
-                eprintln!("{why}");
+                log::error!("{why}");
             }
             t
         }
@@ -144,7 +144,7 @@ pub async fn watch_theme(
         Ok(t) => t,
         Err((errs, t)) => {
             for why in errs {
-                eprintln!("{why}");
+                log::error!("{why}");
             }
             t
         }
@@ -161,7 +161,7 @@ pub async fn watch_theme(
             Ok(t) => t,
             Err((errs, t)) => {
                 for why in errs {
-                    eprintln!("{why}");
+                    log::error!("{why}");
                 }
                 t
             }
@@ -171,7 +171,7 @@ pub async fn watch_theme(
             Ok(t) => t,
             Err((errs, t)) => {
                 for why in errs {
-                    eprintln!("{why}");
+                    log::error!("{why}");
                 }
                 t
             }
@@ -186,14 +186,14 @@ pub async fn watch_theme(
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
             if let Err(err) = Theme::apply_gtk(t.is_dark) {
-                eprintln!("Failed to apply the theme to gtk. {err:?}");
+                log::error!("Failed to apply the theme to gtk. {err:?}");
             }
         }
 
         set_gnome_desktop_interface(theme_mode.is_dark);
     } else {
         if let Err(err) = Theme::reset_gtk() {
-            eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
+            log::error!("Failed to reset the application of the theme to gtk. {err:?}");
         }
     }
 
@@ -224,7 +224,7 @@ pub async fn watch_theme(
         tokio::select! {
             _ = sigterm_rx.recv() => {
                 if let Err(err) = Theme::reset_gtk() {
-                    eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
+                    log::error!("Failed to reset the application of the theme to gtk. {err:?}");
                 }
                 cleanup_tx.send(()).await.unwrap();
             }
@@ -240,7 +240,7 @@ pub async fn watch_theme(
                         let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
 
                         for err in errs {
-                            eprintln!("Error updating the theme mode {err:?}");
+                            log::error!("Error updating the theme mode {err:?}");
                         }
 
                         if sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark)) {
@@ -255,7 +255,7 @@ pub async fn watch_theme(
                             };
 
                             if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
-                                eprintln!("Failed to update theme mode {err:?}");
+                                log::error!("Failed to update theme mode {err:?}");
                             }
                         }
 
@@ -268,14 +268,14 @@ pub async fn watch_theme(
                                 Ok(t) => t,
                                 Err((errs, t)) => {
                                     for err in errs {
-                                        eprintln!("{err}");
+                                        log::error!("{err}");
                                     }
                                     t
                                 }
                             };
 
                             if let Err(err) = Theme::apply_gtk(theme.is_dark) {
-                                eprintln!("Failed to apply the theme to gtk. {err:?}");
+                                log::error!("Failed to apply the theme to gtk. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
@@ -285,7 +285,7 @@ pub async fn watch_theme(
                         let (errs, changes) = tk.update_keys(&tk_helper, &[changes]);
 
                         for err in errs {
-                            eprintln!("Error updating the theme toolkit config {err:?}");
+                            log::error!("Error updating the theme toolkit config {err:?}");
                         }
 
                         if changes.contains(&"icon_theme") {
@@ -306,7 +306,7 @@ pub async fn watch_theme(
                                 Ok(t) => t,
                                 Err((errs, t)) => {
                                     for why in errs {
-                                        eprintln!("{why}");
+                                        log::error!("{why}");
                                     }
                                     t
                                 }
@@ -316,7 +316,7 @@ pub async fn watch_theme(
                                 Ok(t) => t,
                                 Err((errs, t)) => {
                                     for why in errs {
-                                        eprintln!("{why}");
+                                        log::error!("{why}");
                                     }
                                     t
                                 }
@@ -330,13 +330,13 @@ pub async fn watch_theme(
 
                             let t = if theme_mode.is_dark { dark } else { light };
                             if let Err(err) = Theme::apply_gtk(t.is_dark) {
-                                eprintln!("Failed to apply the theme to gtk. {err:?}");
+                                log::error!("Failed to apply the theme to gtk. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
                         } else {
                             if let Err(err) = Theme::reset_gtk() {
-                                eprintln!("Failed to reset the application of the theme to gtk. {err:?}");
+                                log::error!("Failed to reset the application of the theme to gtk. {err:?}");
                             }
                         }
                     },
@@ -349,27 +349,27 @@ pub async fn watch_theme(
                                 Ok(t) => t,
                                 Err((errs, t)) => {
                                     for err in errs {
-                                        eprintln!("Failed to load the theme. {err:?}");
+                                        log::error!("Failed to load the theme. {err:?}");
                                     }
                                     t
                                 },
                             };
                         if tk.apply_theme_global {
                             if let Err(err) = t.write_gtk4() {
-                                eprintln!("Failed to write gtk4 css. {err:?}");
+                                log::error!("Failed to write gtk4 css. {err:?}");
                             }
                             let theme_mode = match ThemeMode::get_entry(&helper) {
                                 Ok(t) => t,
                                 Err((errs, t)) => {
                                     for err in errs {
-                                        eprintln!("Failed to load the theme mode. {err:?}");
+                                        log::error!("Failed to load the theme mode. {err:?}");
                                     }
                                     t
                                 },
                             };
                             if theme_mode.is_dark == is_dark {
                                 if let Err(err) = Theme::apply_gtk(t.is_dark) {
-                                    eprintln!("Failed to apply the theme to gtk. {err:?}");
+                                    log::error!("Failed to apply the theme to gtk. {err:?}");
                                 }
                             }
 
@@ -391,7 +391,7 @@ pub async fn watch_theme(
                 };
 
                 if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
-                    eprintln!("Failed to update theme mode {err:?}");
+                    log::error!("Failed to update theme mode {err:?}");
                 }
                 if tk.apply_theme_global {
                     let theme = match if theme_mode.is_dark {
@@ -402,13 +402,13 @@ pub async fn watch_theme(
                         Ok(t) => t,
                         Err((errs, t)) => {
                             for err in errs {
-                                eprintln!("{err}");
+                                log::error!("{err}");
                             }
                             t
                         }
                     };
                     if let Err(err) = Theme::apply_gtk(theme.is_dark) {
-                        eprintln!("Failed to apply the theme to gtk. {err:?}");
+                        log::error!("Failed to apply the theme to gtk. {err:?}");
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
@@ -429,7 +429,7 @@ pub async fn watch_theme(
                 };
 
                 let Some(&GeoPosition { latitude, longitude }) = geodata.get(&new_timezone) else {
-                    eprintln!("no matching geodata for {new_timezone}");
+                    log::error!("no matching geodata for {new_timezone}");
                     continue;
                 };
 
@@ -438,7 +438,7 @@ pub async fn watch_theme(
                         sunrise_sunset = Some(s);
                     },
                     Err(err) => {
-                        eprintln!("Failed to calculate sunrise and sunset for current location {err:?}");
+                        log::error!("Failed to calculate sunrise and sunset for current location {err:?}");
                         sunrise_sunset = None;
                         continue;
                     },
@@ -453,7 +453,7 @@ pub async fn watch_theme(
                 };
 
                 if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
-                    eprintln!("Failed to update theme mode {err:?}");
+                    log::error!("Failed to update theme mode {err:?}");
                 }
                 if tk.apply_theme_global {
                     let theme = match if theme_mode.is_dark {
@@ -464,13 +464,13 @@ pub async fn watch_theme(
                         Ok(t) => t,
                         Err((errs, t)) => {
                             for err in errs {
-                                eprintln!("{err}");
+                                log::error!("{err}");
                             }
                             t
                         }
                     };
                     if let Err(err) = Theme::apply_gtk(theme.is_dark) {
-                        eprintln!("Failed to apply the theme to gtk. {err:?}");
+                        log::error!("Failed to apply the theme to gtk. {err:?}");
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
