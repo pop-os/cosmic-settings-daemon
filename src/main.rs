@@ -307,7 +307,11 @@ async fn backlight_monitor_task(
             loop {
                 let mut socket = socket.writable_mut().await.unwrap(); // XXX
                 for evt in socket.get_inner().iter() {
-                    eprintln!("{:?}: {:?}", evt.event_type(), evt.device());
+                    eprintln!(
+                        "Backlight '{:?}' event on {}",
+                        evt.event_type(),
+                        evt.device().syspath().display()
+                    );
                     match evt.event_type() {
                         udev::EventType::Add => {
                             backlights.insert(evt.syspath().to_owned(), evt.device());
