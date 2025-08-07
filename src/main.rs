@@ -27,6 +27,7 @@ use zbus::{
 };
 mod battery;
 mod brightness_device;
+mod greeter;
 mod input;
 mod locale;
 mod location;
@@ -368,6 +369,10 @@ async fn main() -> zbus::Result<()> {
         sigterm_tx.send(()).unwrap();
     })
     .expect("Error setting sigterm handler");
+
+    if let Err(err) = greeter::sync_with_greeter() {
+        log::error!("Failed to sync with greeter. {err:?}");
+    }
 
     task::LocalSet::new()
         .run_until(async move {

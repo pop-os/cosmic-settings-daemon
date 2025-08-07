@@ -32,7 +32,7 @@ impl GreeterAccessibilityState {
     }
 }
 
-pub fn apply_hc_theme(enabled: bool) -> Result<Config, cosmic_config::Error> {
+pub fn apply_hc_theme(enabled: bool) -> Result<(), cosmic_config::Error> {
     let set_hc = |is_dark: bool| {
         let builder_config = if is_dark {
             ThemeBuilder::dark_config()?

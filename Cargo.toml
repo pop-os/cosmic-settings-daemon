@@ -9,7 +9,7 @@ members = ["config", "cosmic-settings-daemon-config", "geonames"]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic"}
 
 
 [dependencies]
@@ -18,7 +18,9 @@ cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settin
 ] }
 anyhow = "1.0.97"
 clap = "4.5.32"
-cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config" }
+cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", features = [
+    "greeter",
+] }
 dirs = "6.0.0"
 notify = "8.0.0"
 tokio = { version = "1.44.1", features = ["macros", "net", "rt"] }
@@ -35,6 +37,7 @@ libcosmic = { git = "https://github.com/pop-os/libcosmic" }
 acpid_plug = "0.1.2"
 upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+cosmic-dbus-a11y = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 notify-rust = "4.11.5"
 walkdir = "2.5.0"
 memoize = "0.5.1"
