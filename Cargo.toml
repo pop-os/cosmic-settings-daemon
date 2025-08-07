@@ -9,6 +9,8 @@ members = ["config", "cosmic-settings-daemon-config", "geonames"]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
+
 
 [dependencies]
 cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", features = [
@@ -24,10 +26,9 @@ udev = "0.9.3"
 zbus = { version = "5.7.1", default-features = false, features = ["tokio"] }
 tokio-stream = "0.1.17"
 sunrise = "2.1.0"
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic", features = [
-    "export",
-] }
 cosmic-config.workspace = true
+cosmic-theme.workspace = true
+cosmic-theme.export = true
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 chrono = "0.4.40"
 libcosmic = { git = "https://github.com/pop-os/libcosmic" }

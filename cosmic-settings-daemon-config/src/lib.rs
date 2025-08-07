@@ -1,6 +1,9 @@
 use cosmic_config::{cosmic_config_derive::CosmicConfigEntry, Config, CosmicConfigEntry};
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "greeter")]
+pub mod greeter;
+
 pub const NAME: &str = "com.system76.CosmicSettingsDaemon";
 
 /// Config structure for settings managed by the daemon
