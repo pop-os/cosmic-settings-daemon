@@ -13,7 +13,7 @@ cosmic-theme = { git = "https://github.com/pop-os/libcosmic"}
 
 
 [dependencies]
-cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", features = [
+cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", default-features = false, features = [
     "pulse",
 ] }
 anyhow = "1.0.97"
