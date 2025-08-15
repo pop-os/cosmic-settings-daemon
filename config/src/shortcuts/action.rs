@@ -187,6 +187,8 @@ pub enum System {
     PowerOff,
     /// Takes a screenshot
     Screenshot,
+    /// Suspend the system
+    Suspend,
     /// Opens the system default terminal
     Terminal,
     /// Lowers the volume of the active audio output
