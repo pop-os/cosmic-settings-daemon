@@ -22,7 +22,7 @@
     /// Mutes the active output device
     Mute: "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     /// Mutes the active microphone
-    MuteMic: "amixer sset Capture toggle",
+    MuteMic: "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle",
     /// Plays and Pauses audio
     PlayPause: "playerctl play-pause",
     /// Goes to the next track
