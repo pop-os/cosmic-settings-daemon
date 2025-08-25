@@ -56,6 +56,9 @@ smithay-client-toolkit = { git = "https://github.com/smithay/client-toolkit" }
 cosmic-protocols = { git = "https://github.com/pop-os//cosmic-protocols" }
 cosmic-client-toolkit = { git = "https://github.com/pop-os//cosmic-protocols" }
 
+[profile.release]
+lto = "fat"
+
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
 # libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "fix-gtk-rgba" }
