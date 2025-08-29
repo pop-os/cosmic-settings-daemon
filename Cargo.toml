@@ -9,13 +9,13 @@ members = ["config", "cosmic-settings-daemon-config", "geonames"]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic"}
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
 
 
 [dependencies]
 cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", default-features = false, features = [
     "pulse",
-] }
+], branch = "headset" }
 anyhow = "1.0.97"
 clap = "4.5.32"
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", features = [

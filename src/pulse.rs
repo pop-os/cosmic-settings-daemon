@@ -3,7 +3,7 @@ use std::{io, process::ExitStatus, time::Duration};
 use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDaemonState};
 
 use cosmic_config::CosmicConfigEntry;
-use cosmic_settings_subscriptions::pulse;
+use cosmic_settings_subscriptions::pulse::{self, Availability, PortType};
 use futures::StreamExt;
 
 pub const VIRT_MONO: &'static str = "COSMIC_mono_sink";
@@ -165,9 +165,67 @@ pub(crate) async fn pulse(
                             sink_change = true;
                         }
                     },
+                    pulse::Event::CardInfo(info) => {
+
+                        if info.ports.iter().any(|port| matches!(port.port_type, PortType::Headphones) && matches!(port.availability, Availability::Yes | Availability::Unknown)) &&
+                            info.ports.iter().any(|port| matches!(port.port_type, PortType::Headset) && matches!(port.availability, Availability::Unknown))
+                        {
+                            let card_name = &info.name;
+                            let Some(headphone_profile) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headphones)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority)) else {
+                                log::error!("No headphone profile found for card: {}", card_name);
+                                continue;
+                            };
+                            let Some(headset_profile) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headset)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority)) else {
+                                log::error!("No headset profile found for card: {}", card_name);
+                                continue;
+                            };
+                            let old_card = state.last_card.replace((card_name.clone(), headphone_profile.name.clone(), headset_profile.name.clone()));
+                            if state.last_card == old_card {
+                                log::trace!("Skipping update for tracked card and ports");
+                                continue;
+                            }
+
+                            tokio::spawn({
+                                let card_name = card_name.clone();
+                                let headphone_profile = headphone_profile.name.clone();
+                                let headset_profile = headset_profile.name.clone();
+                                async move {
+                                    for retry in 1..5 {
+                                    let c = tokio::process::Command::new("cosmic-osd")
+                                        .arg("confirm-headphones")
+                                        .arg("--card-name")
+                                        .arg(&card_name)
+                                        .arg("--headphone-profile")
+                                        .arg(&headphone_profile)
+                                        .arg("--headset-profile")
+                                        .arg(&headset_profile)
+                                        .spawn();
+                                        match c {
+                                            Ok(mut child) => {
+                                                match child.wait().await {
+                                                    Ok(status) if !status.success() => {
+                                                        _ = tokio::time::sleep(Duration::from_secs(retry)).await;
+                                                    }
+                                                    Err(err) => {
+                                                        _ = tokio::time::sleep(Duration::from_secs(retry)).await;
+                                                        log::warn!("Failed to wait for cosmic-osd process: {err:?}");
+                                                    }
+                                                    _ => {
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::warn!("Failed to spawn cosmic-osd: {e:?}");
+                                            }
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
                     // don't need to know any of this info
                     pulse::Event::Balance(_)
-                    | pulse::Event::CardInfo(..)
                     | pulse::Event::DefaultSource(_)
                     | pulse::Event::SinkVolume(_)
                     | pulse::Event::Channels(..)
