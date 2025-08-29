@@ -21,7 +21,6 @@ pub struct CosmicSettingsDaemonConfig {
 pub struct CosmicSettingsDaemonState {
     /// the sink that the virtual mono sink is attached to
     pub default_sink_name: String,
-    pub last_card: Option<(String, String, String)>,
 }
 
 impl CosmicSettingsDaemonConfig {
