@@ -1,4 +1,8 @@
-use std::{io, process::ExitStatus, time::Duration};
+use std::{
+    io,
+    process::ExitStatus,
+    time::{Duration, Instant},
+};
 
 use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDaemonState};
 
@@ -74,6 +78,7 @@ pub(crate) async fn pulse(
     mut sigterm_rx: tokio::sync::broadcast::Receiver<()>,
     mut mono_rx: tokio::sync::mpsc::Receiver<()>,
 ) -> anyhow::Result<()> {
+    let start = Instant::now();
     let (tx, mut rx) = futures::channel::mpsc::channel(1);
     let (kill_tx, kill_rx) = futures::channel::oneshot::channel();
     _ = std::thread::spawn(move || {
@@ -86,6 +91,7 @@ pub(crate) async fn pulse(
     if state.default_sink_name == VIRT_MONO {
         state.default_sink_name = String::new();
     }
+    let mut tracked_card: Option<(String, String, String, Availability, Availability)> = None;
     let config_helper = CosmicSettingsDaemonConfig::config()?;
     let mut config = CosmicSettingsDaemonConfig::get_entry(&config_helper).unwrap_or_default();
 
@@ -166,21 +172,20 @@ pub(crate) async fn pulse(
                         }
                     },
                     pulse::Event::CardInfo(info) => {
-
                         if info.ports.iter().any(|port| matches!(port.port_type, PortType::Headphones) && matches!(port.availability, Availability::Yes | Availability::Unknown)) &&
                             info.ports.iter().any(|port| matches!(port.port_type, PortType::Headset) && matches!(port.availability, Availability::Unknown))
                         {
                             let card_name = &info.name;
-                            let Some(headphone_profile) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headphones)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority)) else {
+                            let Some((headphone_profile, headphone_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headphones)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (prof, port.availability))) else {
                                 log::error!("No headphone profile found for card: {}", card_name);
                                 continue;
                             };
-                            let Some(headset_profile) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headset)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority)) else {
+                            let Some((headset_profile, headset_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headset)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (prof, port.availability))) else {
                                 log::error!("No headset profile found for card: {}", card_name);
                                 continue;
                             };
-                            let old_card = state.last_card.replace((card_name.clone(), headphone_profile.name.clone(), headset_profile.name.clone()));
-                            if state.last_card == old_card {
+                            let old_card = tracked_card.replace((card_name.clone(), headphone_profile.name.clone(), headset_profile.name.clone(), headphone_avail, headset_avail));
+                            if tracked_card == old_card {
                                 log::trace!("Skipping update for tracked card and ports");
                                 continue;
                             }
@@ -190,6 +195,11 @@ pub(crate) async fn pulse(
                                 let headphone_profile = headphone_profile.name.clone();
                                 let headset_profile = headset_profile.name.clone();
                                 async move {
+                                    // XX awkward when osd appears with autostart apps and loses focus
+                                    // wait for autostart to settle before starting osd
+                                    if Instant::now().checked_duration_since(start).is_none_or(|t|t < Duration::from_secs(3)) {
+                                        tokio::time::sleep(Duration::from_secs(5)).await;
+                                    }
                                     for retry in 1..5 {
                                     let c = tokio::process::Command::new("cosmic-osd")
                                         .arg("confirm-headphones")
