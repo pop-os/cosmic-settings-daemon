@@ -1122,7 +1122,7 @@ dependencies = [
 [[package]]
 name = "cosmic-settings-subscriptions"
 version = "0.1.0"
-source = "git+https://github.com/pop-os/cosmic-settings-subscriptions?branch=headset#1f97da2c83ce279ea9463758347d531bdcd92e0b"
+source = "git+https://github.com/pop-os/cosmic-settings-subscriptions#6cb0d1605770696812add724496b31d2cfcee83b"
 dependencies = [
  "async-fn-stream",
  "futures",
