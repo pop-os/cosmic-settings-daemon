@@ -232,6 +232,8 @@ pub(crate) async fn pulse(
                                     }
                                 }
                             });
+                        } else if tracked_card.as_ref().is_some_and(|t| t.0 == info.name) {
+                            tracked_card = None;
                         }
                     }
                     // don't need to know any of this info
