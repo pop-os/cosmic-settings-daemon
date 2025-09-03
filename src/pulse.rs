@@ -91,7 +91,15 @@ pub(crate) async fn pulse(
     if state.default_sink_name == VIRT_MONO {
         state.default_sink_name = String::new();
     }
-    let mut tracked_card: Option<(String, String, String, Availability, Availability)> = None;
+    let mut tracked_card: Option<(
+        String,
+        String,
+        String,
+        String,
+        String,
+        Availability,
+        Availability,
+    )> = None;
     let config_helper = CosmicSettingsDaemonConfig::config()?;
     let mut config = CosmicSettingsDaemonConfig::get_entry(&config_helper).unwrap_or_default();
 
@@ -176,15 +184,15 @@ pub(crate) async fn pulse(
                             info.ports.iter().any(|port| matches!(port.port_type, PortType::Headset) && matches!(port.availability, Availability::Unknown))
                         {
                             let card_name = &info.name;
-                            let Some((headphone_profile, headphone_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headphones)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (prof, port.availability))) else {
+                            let Some((headphone_port, headphone_profile, headphone_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headphones)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (port.name.clone(), prof, port.availability))) else {
                                 log::error!("No headphone profile found for card: {}", card_name);
                                 continue;
                             };
-                            let Some((headset_profile, headset_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headset)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (prof, port.availability))) else {
+                            let Some((headset_port, headset_profile, headset_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headset)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (port.name.clone(), prof, port.availability))) else {
                                 log::error!("No headset profile found for card: {}", card_name);
                                 continue;
                             };
-                            let old_card = tracked_card.replace((card_name.clone(), headphone_profile.name.clone(), headset_profile.name.clone(), headphone_avail, headset_avail));
+                            let old_card = tracked_card.replace((card_name.clone(), headphone_port, headset_port.clone(), headphone_profile.name.clone(), headset_profile.name.clone(), headphone_avail, headset_avail));
                             if tracked_card == old_card {
                                 log::trace!("Skipping update for tracked card and ports");
                                 continue;
@@ -194,6 +202,7 @@ pub(crate) async fn pulse(
                                 let card_name = card_name.clone();
                                 let headphone_profile = headphone_profile.name.clone();
                                 let headset_profile = headset_profile.name.clone();
+                                let headset_port = headset_port.clone();
                                 async move {
                                     // XX awkward when osd appears with autostart apps and loses focus
                                     // wait for autostart to settle before starting osd
@@ -207,6 +216,8 @@ pub(crate) async fn pulse(
                                         .arg(&card_name)
                                         .arg("--headphone-profile")
                                         .arg(&headphone_profile)
+                                        .arg("--headset-port-name")
+                                        .arg(&headset_port)
                                         .arg("--headset-profile")
                                         .arg(&headset_profile)
                                         .spawn();
