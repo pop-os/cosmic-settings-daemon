@@ -23,6 +23,8 @@ pub struct Binding {
         serialize_with = "super::sym::serialize"
     )]
     pub key: Option<xkb::Keysym>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keycode: Option<u32>,
     // A custom description for a custom binding
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -34,7 +36,18 @@ impl Binding {
         Binding {
             description: None,
             modifiers: modifiers.into(),
+            keycode: None,
             key,
+        }
+    }
+
+    /// Creates a new key binding from a modifier and optional key
+    pub fn new_keycode(modifiers: impl Into<Modifiers>, key: Option<xkb::Keycode>) -> Binding {
+        Binding {
+            description: None,
+            modifiers: modifiers.into(),
+            keycode: None,
+            key: None,
         }
     }
 

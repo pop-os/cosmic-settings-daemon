@@ -159,6 +159,7 @@ impl Shortcuts {
         &mut self,
         modifiers: Modifiers,
         keys: impl Iterator<Item = xkb::Keysym>,
+        keycodes: impl Iterator<Item = xkb::Keycode>,
         action: Action,
     ) {
         if !self.0.values().any(|a| a == &action) {
@@ -166,7 +167,19 @@ impl Shortcuts {
                 let pattern = Binding {
                     description: None,
                     modifiers: modifiers.clone(),
+                    keycode: None,
                     key: Some(key),
+                };
+                if !self.0.contains_key(&pattern) {
+                    self.0.insert(pattern, action.clone());
+                }
+            }
+            for key in keycodes {
+                let pattern = Binding {
+                    description: None,
+                    modifiers: modifiers.clone(),
+                    keycode: Some(key.raw()),
+                    key: None,
                 };
                 if !self.0.contains_key(&pattern) {
                     self.0.insert(pattern, action.clone());
