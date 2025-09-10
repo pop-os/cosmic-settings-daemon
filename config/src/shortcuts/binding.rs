@@ -80,7 +80,7 @@ impl Binding {
                             // Fallback to case insensitive lookup.
                             match xkb::keysym_from_name(&name, xkb::KEYSYM_CASE_INSENSITIVE) {
                                 x_insensitive if x_insensitive.raw() == super::sym::NO_SYMBOL => {
-                                    return Err(format!("'{name}' is not a valid key symbol"))
+                                    return Err(format!("'{name}' is not a valid key symbol"));
                                 }
                                 x_insensitive => {
                                     binding.key = Some(x_insensitive);

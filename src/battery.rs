@@ -3,7 +3,7 @@ use notify_rust::Notification;
 use std::time::Instant;
 use std::{path::Path, time::Duration};
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc::{error::TryRecvError, Receiver};
+use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 use tokio_stream::StreamExt;
 use upower_dbus::BatteryLevel;
 use zbus::Connection;
