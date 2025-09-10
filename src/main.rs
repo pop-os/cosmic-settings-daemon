@@ -3,27 +3,27 @@
 
 use brightness_device::BrightnessDevice;
 use logind_session::LogindSessionProxy;
-use notify::{event::ModifyKind, EventKind, Watcher};
+use notify::{EventKind, Watcher, event::ModifyKind};
 use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 use std::{
     collections::{HashMap, HashSet},
     io,
     path::PathBuf,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
 };
 use theme::watch_theme;
 use tokio::{
-    io::{unix::AsyncFd, Interest},
+    io::{Interest, unix::AsyncFd},
     sync::RwLock,
     task,
 };
 use tokio_stream::StreamExt;
 use zbus::{
+    Connection, MatchRule, MessageStream,
     names::{MemberName, UniqueName, WellKnownName},
     object_server::SignalEmitter,
     zvariant::ObjectPath,
-    Connection, MatchRule, MessageStream,
 };
 mod battery;
 mod brightness_device;

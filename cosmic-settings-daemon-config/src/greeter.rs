@@ -1,4 +1,4 @@
-use cosmic_config::{cosmic_config_derive::CosmicConfigEntry, Config, CosmicConfigEntry};
+use cosmic_config::{Config, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
 use cosmic_theme::{CosmicPalette, Theme, ThemeBuilder};
 use serde::{Deserialize, Serialize};
 use std::{option_env, path::PathBuf};
