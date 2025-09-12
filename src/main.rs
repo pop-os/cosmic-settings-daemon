@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use brightness_device::BrightnessDevice;
+use cosmic_config::{Config as CosmicConfig, ConfigGet};
 use logind_session::LogindSessionProxy;
 use notify::{EventKind, Watcher, event::ModifyKind};
 use std::sync::atomic::AtomicU64;
@@ -45,6 +46,10 @@ pub static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 static DBUS_NAME: &str = "com.system76.CosmicSettingsDaemon";
 static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
+
+const AUDIO_CONFIG: &str = "com.system76.CosmicAudio";
+const AMPLIFICATION_SINK: &str = "amplification_sink";
+// const AMPLIFICATION_SOURCE: &str = "amplification_source";
 
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
@@ -208,6 +213,44 @@ impl SettingsDaemon {
 
     async fn decrease_keyboard_brightness(&self) {}
 
+    async fn volume_up(&self) {
+        let amplification_enabled = self.get_amplification_sink().await;
+        let limit = if amplification_enabled { "1.5" } else { "1.0" };
+
+        if let Err(e) = self
+            .run_wpctl(&["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+            .await
+        {
+            log::error!("Failed to unmute audio: {}", e);
+        }
+
+        if let Err(e) = self
+            .run_wpctl(&["set-volume", "@DEFAULT_AUDIO_SINK@", "5%+", "-l", limit])
+            .await
+        {
+            log::error!("Failed to increase volume: {}", e);
+        }
+    }
+
+    async fn volume_down(&self) {
+        let amplification_enabled = self.get_amplification_sink().await;
+        let limit = if amplification_enabled { "1.5" } else { "1.0" };
+
+        if let Err(e) = self
+            .run_wpctl(&["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+            .await
+        {
+            log::error!("Failed to unmute audio: {}", e);
+        }
+
+        if let Err(e) = self
+            .run_wpctl(&["set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", "-l", limit])
+            .await
+        {
+            log::error!("Failed to decrease volume: {}", e);
+        }
+    }
+
     async fn watch_config(
         &mut self,
         id: &str,
@@ -227,6 +270,32 @@ impl SettingsDaemon {
 }
 
 impl SettingsDaemon {
+    async fn run_wpctl(&self, args: &[&str]) -> Result<(), std::io::Error> {
+        let output = tokio::process::Command::new("wpctl")
+            .args(args)
+            .output()
+            .await?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                String::from_utf8_lossy(&output.stderr),
+            ))
+        }
+    }
+
+    async fn get_amplification_sink(&self) -> bool {
+        match CosmicConfig::new(AUDIO_CONFIG, 1) {
+            Ok(config) => config.get::<bool>(AMPLIFICATION_SINK).unwrap_or(true),
+            Err(e) => {
+                log::debug!("Failed to read audio amplification config: {}", e);
+                true
+            }
+        }
+    }
+
     async fn watch_config_inner(
         &mut self,
         config: Config,
