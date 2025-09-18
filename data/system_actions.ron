@@ -35,6 +35,8 @@
     Screenshot: "cosmic-screenshot",
     /// Opens the system default terminal
     Terminal: "cosmic-term",
+    /// Toggles touchpad on/off
+    TouchpadToggle: "cosmic-osd touchpad",
     /// Lowers the volume of the active output device
     VolumeLower: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon VolumeDown",
     /// Raises the volume of the active output device
