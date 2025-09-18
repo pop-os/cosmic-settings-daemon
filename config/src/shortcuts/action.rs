@@ -189,6 +189,8 @@ pub enum System {
     Screenshot,
     /// Opens the system default terminal
     Terminal,
+    /// Toggles touchpad on/off
+    TouchpadToggle,
     /// Lowers the volume of the active audio output
     VolumeLower,
     /// Raises the volume of the active audio output
