@@ -151,6 +151,7 @@ pub async fn watch_theme(
     };
 
     set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
+    set_gnome_icon_theme(tk.icon_theme.clone());
 
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
