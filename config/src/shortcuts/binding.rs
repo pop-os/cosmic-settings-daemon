@@ -110,6 +110,7 @@ impl Binding {
     /// Check if the binding has been set
     pub fn is_set(&self) -> bool {
         (self.has_modifier() && self.key.is_some())
+            || self.is_super()
             || self.key.map_or(false, |key| {
                 // Allow Home/End, Print, PageDown/Up, etc.
                 key.is_misc_function_key()
@@ -200,7 +201,7 @@ impl FromStr for Binding {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let binding = Binding::from_str_partial(value)?;
-        if binding.key.is_none() {
+        if binding.key.is_none() && !binding.modifiers.logo {
             return Err(format!("no key was defined for this binding"));
         }
 
