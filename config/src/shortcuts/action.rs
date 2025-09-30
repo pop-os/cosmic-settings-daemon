@@ -159,6 +159,8 @@ pub enum System {
     BrightnessDown,
     /// Increases screen brightness
     BrightnessUp,
+    /// Toggles display mode
+    DisplayToggle,
     /// Opens the home folder in a system default file browser
     HomeFolder,
     /// Switch the currently-active input source
