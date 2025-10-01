@@ -143,11 +143,21 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
                         }
 
                         100.0 => {
+                            if matches!(current_battery, BatteryLevel::Critical) {
+                                let _res = nag_tx.send(false).await;
+                            }
+
                             current_battery = BatteryLevel::Full;
                             crate::pipewire::play_sound("Pop", "battery-full");
                         }
 
-                        _ => current_battery = BatteryLevel::Normal,
+                        _ => {
+                            if matches!(current_battery, BatteryLevel::Critical) {
+                                let _res = nag_tx.send(false).await;
+                            }
+
+                            current_battery = BatteryLevel::Normal
+                        },
                     }
                 }
             }
