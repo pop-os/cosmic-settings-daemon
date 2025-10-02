@@ -35,6 +35,8 @@
     PowerOff: "cosmic-osd shutdown",
     /// Takes a screenshot
     Screenshot: "cosmic-screenshot",
+    /// Suspend the system
+    Suspend: "systemctl suspend",
     /// Opens the system default terminal
     Terminal: "cosmic-term",
     /// Toggles touchpad on/off
