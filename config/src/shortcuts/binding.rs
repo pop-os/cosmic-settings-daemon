@@ -158,7 +158,7 @@ impl Binding {
         }
 
         if let Some(key) = self.key {
-            string.push_str(&uppercase_first_letter(&xkb::keysym_get_name(key)));
+            string.push_str(&xkb::keysym_get_name(key));
         } else if !string.is_empty() {
             string.remove(string.len() - 1);
         }
