@@ -164,8 +164,11 @@ impl SettingsDaemon {
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
             if let Some(brightness_device) = self.display_brightness_device.as_ref() {
+                // Align with slider behavior and device clamp: floor at 1 for backlight
+                let max = brightness_device.max_brightness() as i32;
+                let clamped = value.clamp(1, max);
                 _ = brightness_device
-                    .set_brightness(logind_session, value as u32)
+                    .set_brightness(logind_session, clamped as u32)
                     .await;
             }
         }
@@ -204,7 +207,8 @@ impl SettingsDaemon {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
-            self.set_display_brightness((value - step).max(0)).await;
+            // Never drive to 0
+            self.set_display_brightness((value - step).max(1)).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }

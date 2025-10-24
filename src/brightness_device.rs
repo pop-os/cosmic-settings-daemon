@@ -39,10 +39,15 @@ impl BrightnessDevice {
         logind_session: &LogindSessionProxy<'_>,
         value: u32,
     ) -> zbus::Result<()> {
+        // Never set 0 on LCD panel backlights; it blanks the screen.
+        // Keyboard LEDs and other subsystems can still use 0.
+        let min = if self.subsystem == "backlight" { 1 } else { 0 };
+        let clamped = value.clamp(min, self.max_brightness);
         logind_session
-            .set_brightness(self.subsystem, &self.sysname, value)
+            .set_brightness(self.subsystem, &self.sysname, clamped)
             .await
     }
+
 
     // Matches definition used in gnome-settings-daemon, which seems to work
     // well enough.
