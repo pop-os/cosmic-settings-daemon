@@ -190,11 +190,16 @@ impl SettingsDaemon {
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
             let max = self.max_display_brightness().await;
-            if (max - value) < step {
-                self.set_display_brightness(max).await;
+            // If we're at the clamped floor (1), jump straight to the first step.
+            // Otherwise follow the usual stepping, capping at max.
+            let next = if value <= 1 {
+                step
+            } else if (max - value) < step {
+                max
             } else {
-                self.set_display_brightness((value + step).max(0)).await;
-            }
+                value + step
+            };
+            self.set_display_brightness(next).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }
@@ -207,8 +212,9 @@ impl SettingsDaemon {
         let value = self.display_brightness().await;
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
-            // Never drive to 0
-            self.set_display_brightness((value - step).max(1)).await;
+            // When within one step of the floor, snap to 1 (the clamped min).
+            let next = if value <= step { 1 } else { value - step };
+            self.set_display_brightness(next).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }
