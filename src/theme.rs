@@ -144,6 +144,12 @@ pub async fn watch_theme(
         Ok(t) => t,
         Err((errs, t)) => {
             for why in errs {
+                if let cosmic_config::Error::GetKey(_, err) = &why {
+                    if err.kind() == std::io::ErrorKind::NotFound {
+                        // No system default config installed; don't error
+                        continue;
+                    }
+                }
                 log::error!("{why}");
             }
             t
