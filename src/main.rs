@@ -127,6 +127,27 @@ impl Config {
     }
 }
 
+// Converts the current raw brightness value to a discrete 5% step index (0–20).
+#[inline]
+fn step_index_from_raw(raw_brightness: i32, max_raw: i32) -> i32 {
+    if max_raw <= 0 {
+        0
+    } else {
+        // round(raw * 20 / max)
+        let idx = (((raw_brightness as i64) * 20 + (max_raw as i64) / 2) / (max_raw as i64)) as i32;
+        idx.clamp(0, 20)
+    }
+}
+
+// Converts a 5%-based step index (0–20) back to the corresponding raw brightness.
+#[inline]
+fn raw_from_step_index(step_index: i32, max_raw: i32) -> i32 {
+    let idx = step_index.clamp(0, 20) as i64;
+    let max = max_raw.max(0) as i64;
+    // round(max * idx / 20)
+    (((idx * max) + 10) / 20) as i32
+}
+
 #[zbus::interface(name = "com.system76.CosmicSettingsDaemon")]
 impl SettingsDaemon {
     #[zbus(property)]
@@ -187,35 +208,31 @@ impl SettingsDaemon {
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
-        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-            let step = brightness_device.brightness_step() as i32;
-            let max = self.max_display_brightness().await;
-            // If we're at the clamped floor (1), jump straight to the first usable step.
-            // Otherwise follow the usual stepping, capping at max.
-            let first_step = step.max(2).min(max);
-            let next = if value <= 1 {
-                first_step
-            } else if (max - value) < step {
-                max
-            } else {
-                value + step
-            };
-            self.set_display_brightness(next).await;
+        if self.display_brightness_device.is_some() {
+            let max_raw = self.max_display_brightness().await;
+            let raw = value;
+            let curr_step = step_index_from_raw(raw, max_raw);
+            // If brightness is clamped at the floor, first increase jumps to 5%.
+            let next_step = if raw <= 1 { 1 } else { (curr_step + 1).clamp(1, 20) };
+            let target = raw_from_step_index(next_step, max_raw);
+            self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }
 
     async fn decrease_display_brightness(
         &self,
-
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
-        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-            let step = brightness_device.brightness_step() as i32;
-            // When within one step of the floor, snap to 1 (the clamped min).
-            let next = if value <= step { 1 } else { value - step };
-            self.set_display_brightness(next).await;
+        if self.display_brightness_device.is_some() {
+            let max_raw = self.max_display_brightness().await;
+            let raw = value;
+            let curr_step = step_index_from_raw(raw, max_raw);
+            let next_step = (curr_step - 1).max(0);
+            // If next step would be 0% we explicitly write raw=1 to avoid blanking.
+            let target = if next_step == 0 { 1 } else { raw_from_step_index(next_step, max_raw) };
+            self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }
