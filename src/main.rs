@@ -190,10 +190,11 @@ impl SettingsDaemon {
         if let Some(brightness_device) = self.display_brightness_device.as_ref() {
             let step = brightness_device.brightness_step() as i32;
             let max = self.max_display_brightness().await;
-            // If we're at the clamped floor (1), jump straight to the first step.
+            // If we're at the clamped floor (1), jump straight to the first usable step.
             // Otherwise follow the usual stepping, capping at max.
+            let first_step = step.max(2).min(max);
             let next = if value <= 1 {
-                step
+                first_step
             } else if (max - value) < step {
                 max
             } else {
