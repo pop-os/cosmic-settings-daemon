@@ -127,25 +127,37 @@ impl Config {
     }
 }
 
-// Converts the current raw brightness value to a discrete 5% step index (0–20).
-#[inline]
-fn step_index_from_raw(raw_brightness: i32, max_raw: i32) -> i32 {
-    if max_raw <= 0 {
-        0
-    } else {
-        // round(raw * 20 / max)
-        let idx = (((raw_brightness as i64) * 20 + (max_raw as i64) / 2) / (max_raw as i64)) as i32;
-        idx.clamp(0, 20)
-    }
-}
-
-// Converts a 5%-based step index (0–20) back to the corresponding raw brightness.
+// Map a 5%-step index (0..20) to a raw brightness value with integer half-up rounding.
 #[inline]
 fn raw_from_step_index(step_index: i32, max_raw: i32) -> i32 {
     let idx = step_index.clamp(0, 20) as i64;
     let max = max_raw.max(0) as i64;
     // round(max * idx / 20)
     (((idx * max) + 10) / 20) as i32
+}
+
+// Return the next *distinct* raw target strictly above/below `raw` following 5% setpoints.
+// dir: +1 for increase, -1 for decrease.
+// Min=0 or 1 is enforced in brightness_device.rs; we just choose the target here.
+#[inline]
+fn next_target_raw(raw: i32, max_raw: i32, dir: i8) -> i32 {
+    if max_raw <= 0 { return raw; }
+
+    if dir > 0 {
+        // Increase: smallest setpoint strictly > raw
+        for k in 0..=20 {
+            let sp = raw_from_step_index(k, max_raw);
+            if sp > raw { return sp; }
+        }
+        max_raw
+    } else {
+        // Decrease: largest setpoint strictly < raw
+        for k in (0..=20).rev() {
+            let sp = raw_from_step_index(k, max_raw);
+            if sp < raw { return sp; }
+        }
+        0
+    }
 }
 
 #[zbus::interface(name = "com.system76.CosmicSettingsDaemon")]
@@ -187,7 +199,8 @@ impl SettingsDaemon {
             if let Some(brightness_device) = self.display_brightness_device.as_ref() {
                 // Align with slider behavior and device clamp: floor at 1 for backlight
                 let max = brightness_device.max_brightness() as i32;
-                let clamped = value.clamp(1, max);
+                let min = brightness_device.min_brightness() as i32;
+                let clamped = value.clamp(min, max);
                 _ = brightness_device
                     .set_brightness(logind_session, clamped as u32)
                     .await;
@@ -210,11 +223,7 @@ impl SettingsDaemon {
         let value = self.display_brightness().await;
         if self.display_brightness_device.is_some() {
             let max_raw = self.max_display_brightness().await;
-            let raw = value;
-            let curr_step = step_index_from_raw(raw, max_raw);
-            // If brightness is clamped at the floor, first increase jumps to 5%.
-            let next_step = if raw <= 1 { 1 } else { (curr_step + 1).clamp(1, 20) };
-            let target = raw_from_step_index(next_step, max_raw);
+            let target = next_target_raw(value, max_raw, 1);
             self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
@@ -227,11 +236,7 @@ impl SettingsDaemon {
         let value = self.display_brightness().await;
         if self.display_brightness_device.is_some() {
             let max_raw = self.max_display_brightness().await;
-            let raw = value;
-            let curr_step = step_index_from_raw(raw, max_raw);
-            let next_step = (curr_step - 1).max(0);
-            // If next step would be 0% we explicitly write raw=1 to avoid blanking.
-            let target = if next_step == 0 { 1 } else { raw_from_step_index(next_step, max_raw) };
+            let target = next_target_raw(value, max_raw, -1);
             self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
         }

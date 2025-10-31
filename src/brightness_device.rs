@@ -34,15 +34,22 @@ impl BrightnessDevice {
         self.max_brightness
     }
 
+    pub fn min_brightness(&self) -> u32 {
+        if self.subsystem == "backlight" {
+            if self.max_brightness <= 20 { 0 } else { 1 }
+        } else {
+            0
+        }
+    }
+
     pub async fn set_brightness(
         &self,
         logind_session: &LogindSessionProxy<'_>,
         value: u32,
     ) -> zbus::Result<()> {
-        // Never set 0 on LCD panel backlights; it blanks the screen.
+        // Never set 0 on LCD backlights unless the device is clearly coarse (<=20 levels).
         // Keyboard LEDs and other subsystems can still use 0.
-        let min = if self.subsystem == "backlight" { 1 } else { 0 };
-        let clamped = value.clamp(min, self.max_brightness);
+        let clamped = value.clamp(self.min_brightness(), self.max_brightness);
         logind_session
             .set_brightness(self.subsystem, &self.sysname, clamped)
             .await
