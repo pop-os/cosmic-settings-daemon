@@ -189,6 +189,8 @@ pub enum System {
     PowerOff,
     /// Takes a screenshot
     Screenshot,
+    /// Suspend the system
+    Suspend,
     /// Opens the system default terminal
     Terminal,
     /// Toggles touchpad on/off
