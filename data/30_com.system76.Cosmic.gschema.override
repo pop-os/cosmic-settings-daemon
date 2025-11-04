@@ -1,0 +1,5 @@
+[org.gnome.desktop.interface:COSMIC]
+icon-theme='Cosmic'
+
+[org.gnome.desktop.wm.preferences:COSMIC]
+button-layout=':minimize,maximize,close'
