@@ -1,6 +1,6 @@
 use std::{error::Error, io, str::FromStr, time::Duration};
 use tokio::fs;
-use tokio::time::{self, Instant};
+use tokio::time;
 
 use crate::LogindSessionProxy;
 
@@ -52,51 +52,33 @@ impl BrightnessDevice {
             return Ok(());
         }
         let max = self.max_brightness();
-        // If the driver doesn't expose actual_brightness, do nothing.
-        let Ok(Some(initial_ab)) = self.actual_brightness().await else {
+        if max == 0 {
             return Ok(());
-        };
-        if initial_ab > 0 {
+        }
+        // Only guard near the bottom of the range (≈5%). Higher levels are assumed visible.
+        if target > max / 20 {
             return Ok(());
         }
         const SETTLE_WINDOW: Duration = Duration::from_millis(40);
-        const POLL_INTERVAL: Duration = Duration::from_millis(3);
         const MAX_BUMPS: u32 = 3;
         let mut current_target = target;
-        // Bound the number of guarded increments to avoid ratcheting to max on buggy drivers.
         for _ in 0..MAX_BUMPS {
-            let start = Instant::now();
-            loop {
-                match self.actual_brightness().await {
-                    Ok(Some(value)) if value > 0 => return Ok(()),
-                    Ok(Some(_)) => {}
-                    Ok(None) => return Ok(()),
-                    Err(err) => {
-                        log::debug!(
-                            "Stopping brightness guard due to actual_brightness read failure: {err}"
-                        );
-                        return Ok(());
-                    }
+            // Give the driver time to apply the new level before we judge visibility.
+            time::sleep(SETTLE_WINDOW).await;
+            match self.actual_brightness().await {
+                // Still effectively off after settling: try a small bump.
+                Ok(Some(0)) => {
+                    // fall through to bump logic below
                 }
-                let elapsed = start.elapsed();
-                if elapsed >= SETTLE_WINDOW {
+                // Visible (non-zero) or no separate actual_brightness: stop guarding.
+                Ok(Some(_)) | Ok(None) => return Ok(()),
+                // Read error: stop guarding rather than looping.
+                Err(err) => {
                     log::debug!(
-                        "Brightness guard waited {:?} but actual_brightness stayed at 0 (target {}).",
-                        SETTLE_WINDOW,
-                        current_target
+                        "Stopping brightness guard due to actual_brightness read failure: {err}"
                     );
-                    break;
+                    return Ok(());
                 }
-                let remaining = SETTLE_WINDOW - elapsed;
-                let sleep_for = if remaining > POLL_INTERVAL {
-                    POLL_INTERVAL
-                } else {
-                    remaining
-                };
-                if sleep_for == Duration::ZERO {
-                    break;
-                }
-                time::sleep(sleep_for).await;
             }
             if current_target >= max {
                 log::debug!(
@@ -113,12 +95,10 @@ impl BrightnessDevice {
             logind_session
                 .set_brightness(self.subsystem, &self.sysname, current_target)
                 .await?;
-            if current_target == max {
-                log::debug!(
-                    "Brightness guard bumped brightness to max ({}) after waiting for visibility.",
-                    current_target
-                );
-            }
+            log::debug!(
+                "Brightness guard bumped backlight brightness to {} after detecting ab==0.",
+                current_target
+            );
         }
         Ok(())
     }
