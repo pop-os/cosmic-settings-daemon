@@ -127,6 +127,39 @@ impl Config {
     }
 }
 
+// Map a 5%-step index (0..20) to a raw brightness value with integer half-up rounding.
+#[inline]
+fn raw_from_step_index(step_index: i32, max_raw: i32) -> i32 {
+    let idx = step_index.clamp(0, 20) as i64;
+    let max = max_raw.max(0) as i64;
+    // round(max * idx / 20)
+    (((idx * max) + 10) / 20) as i32
+}
+
+// Return the next *distinct* raw target strictly above/below `raw` following 5% setpoints.
+// dir: +1 for increase, -1 for decrease.
+// Min=0 or 1 is enforced in brightness_device.rs; we just choose the target here.
+#[inline]
+fn next_target_raw(raw: i32, max_raw: i32, dir: i8) -> i32 {
+    if max_raw <= 0 { return raw; }
+
+    if dir > 0 {
+        // Increase: smallest setpoint strictly > raw
+        for k in 0..=20 {
+            let sp = raw_from_step_index(k, max_raw);
+            if sp > raw { return sp; }
+        }
+        max_raw
+    } else {
+        // Decrease: largest setpoint strictly < raw
+        for k in (0..=20).rev() {
+            let sp = raw_from_step_index(k, max_raw);
+            if sp < raw { return sp; }
+        }
+        0
+    }
+}
+
 #[zbus::interface(name = "com.system76.CosmicSettingsDaemon")]
 impl SettingsDaemon {
     #[zbus(property)]
@@ -164,8 +197,12 @@ impl SettingsDaemon {
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
             if let Some(brightness_device) = self.display_brightness_device.as_ref() {
+                // Align with slider behavior and device clamp: floor at 1 for backlight
+                let max = brightness_device.max_brightness() as i32;
+                let min = brightness_device.min_brightness() as i32;
+                let clamped = value.clamp(min, max);
                 _ = brightness_device
-                    .set_brightness(logind_session, value as u32)
+                    .set_brightness(logind_session, clamped as u32)
                     .await;
             }
         }
@@ -184,27 +221,23 @@ impl SettingsDaemon {
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
-        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-            let step = brightness_device.brightness_step() as i32;
-            let max = self.max_display_brightness().await;
-            if (max - value) < step {
-                self.set_display_brightness(max).await;
-            } else {
-                self.set_display_brightness((value + step).max(0)).await;
-            }
+        if self.display_brightness_device.is_some() {
+            let max_raw = self.max_display_brightness().await;
+            let target = next_target_raw(value, max_raw, 1);
+            self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }
 
     async fn decrease_display_brightness(
         &self,
-
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
-        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-            let step = brightness_device.brightness_step() as i32;
-            self.set_display_brightness((value - step).max(0)).await;
+        if self.display_brightness_device.is_some() {
+            let max_raw = self.max_display_brightness().await;
+            let target = next_target_raw(value, max_raw, -1);
+            self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
         }
     }
