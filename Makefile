@@ -21,6 +21,7 @@ endif
 BIN = cosmic-settings-daemon
 SYSTEM_ACTIONS_CONF = "$(DESTDIR)$(sharedir)/cosmic/com.system76.CosmicSettings.Shortcuts/v1/system_actions"
 POLKIT_RULE = "$(DESTDIR)$(sharedir)/polkit-1/rules.d/cosmic-settings-daemon.rules"
+GSETTINGS_OVERRIDE = "$(DESTDIR)$(sharedir)/glib-2.0/schemas/30_com.system76.Cosmic.gschema.override"
 
 all: $(BIN)
 
@@ -37,6 +38,7 @@ install:
 	install -Dm0755 "$(CARGO_TARGET_DIR)/$(TARGET)/$(BIN)" "$(DESTDIR)$(bindir)/$(BIN)"
 	install -Dm0644 "data/system_actions.ron" "$(SYSTEM_ACTIONS_CONF)"
 	install -Dm0644 "data/polkit-1/rules.d/cosmic-settings-daemon.rules" "$(POLKIT_RULE)"
+	install -Dm0644 "data/30_com.system76.Cosmic.gschema.override" "$(GSETTINGS_OVERRIDE)"
 
 ## Cargo Vendoring
 
