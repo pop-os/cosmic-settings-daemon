@@ -12,6 +12,9 @@ pub enum Action {
     /// Show a debug overlay, if enabled in the compositor build
     Debug,
 
+    /// Force kill the active window and its process
+    Kill,
+
     /// Disable a default shortcut binding
     Disable,
 
