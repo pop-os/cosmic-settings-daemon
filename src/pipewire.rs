@@ -12,6 +12,8 @@ pub fn play(path: &Path) {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::inherit())
+        .arg("--media-role")
+        .arg("Notification")
         .arg(path)
         .spawn();
 }
