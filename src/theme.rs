@@ -156,13 +156,13 @@ pub async fn watch_theme(
         }
     };
 
-    set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
-    set_gnome_icon_theme(tk.icon_theme.clone());
-
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
 
     if tk.apply_theme_global {
+        set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
+        set_gnome_icon_theme(tk.icon_theme.clone());
+
         // Write the gtk variables for both themes in case they have changed in the meantime
         let dark = match Theme::get_entry(&dark_helper) {
             Ok(t) => t,
@@ -295,12 +295,14 @@ pub async fn watch_theme(
                             log::error!("Error updating the theme toolkit config {err:?}");
                         }
 
-                        if changes.contains(&"icon_theme") {
-                            set_gnome_icon_theme(tk.icon_theme.clone());
-                        }
+                        if tk.apply_theme_global {
+                            if changes.contains(&"icon_theme") {
+                                set_gnome_icon_theme(tk.icon_theme.clone());
+                            }
 
-                        if changes.contains(&"show_maximize") || changes.contains(&"show_minimize") {
-                            set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
+                            if changes.contains(&"show_maximize") || changes.contains(&"show_minimize") {
+                                set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
+                            }
                         }
 
                         if !changes.contains(&"apply_theme_global") {
@@ -308,6 +310,9 @@ pub async fn watch_theme(
                         }
 
                         if tk.apply_theme_global {
+                            set_gnome_icon_theme(tk.icon_theme.clone());
+                            set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
+
                             // Write the gtk variables for both themes in case they have changed in the meantime
                             let dark = match Theme::get_entry(&dark_helper) {
                                 Ok(t) => t,
