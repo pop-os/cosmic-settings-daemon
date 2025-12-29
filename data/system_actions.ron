@@ -37,6 +37,8 @@
     Screenshot: "cosmic-screenshot",
     /// Suspend the system
     Suspend: "systemctl suspend",
+    /// Toggles the screen reader
+    ScreenReader: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon ScreenReader",
     /// Opens the system default terminal
     Terminal: "cosmic-term",
     /// Toggles touchpad on/off
