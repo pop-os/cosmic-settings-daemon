@@ -3,6 +3,7 @@
 
 use brightness_device::BrightnessDevice;
 use cosmic_config::{Config as CosmicConfig, ConfigGet};
+use futures::lock::Mutex;
 use logind_session::LogindSessionProxy;
 use notify::{EventKind, Watcher, event::ModifyKind};
 use std::sync::atomic::AtomicU64;
@@ -53,6 +54,7 @@ const AMPLIFICATION_SINK: &str = "amplification_sink";
 
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
+    a11y_session: Option<Mutex<cosmic_dbus_a11y::StatusProxy<'static>>>,
     display_brightness_device: Option<BrightnessDevice>,
     watched_configs: Arc<
         RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
@@ -245,6 +247,31 @@ impl SettingsDaemon {
     async fn increase_keyboard_brightness(&self) {}
 
     async fn decrease_keyboard_brightness(&self) {}
+
+    async fn screen_reader(&mut self) {
+        if let Some(a11y) = self.a11y_session.as_ref() {
+            let guard = a11y.lock().await;
+            let Ok(current_state) = guard.is_enabled().await else {
+                log::error!("Failed to toggle screen reader. Could not read current state.");
+                return;
+            };
+            let new_state = !current_state;
+            if let Err(err) = guard.set_is_enabled(new_state).await {
+                log::error!(
+                    "Failed to toggle screen reader. Could not apply current state. {err:?}"
+                );
+                return;
+            }
+            if let Err(err) = guard.set_screen_reader_enabled(new_state).await {
+                log::error!(
+                    "Failed to toggle screen reader. Could not apply current state. {err:?}"
+                );
+                return;
+            }
+        } else {
+            log::error!("Failed to toggle screen reader.")
+        }
+    }
 
     async fn volume_up(&self) {
         let amplification_enabled = self.get_amplification_sink().await;
@@ -496,6 +523,12 @@ async fn main() -> zbus::Result<()> {
                 LogindSessionProxy::builder(&connection).build().await
             }
             .await;
+
+            let a11y_session = async {
+                let connection = zbus::Connection::session().await?;
+                cosmic_dbus_a11y::StatusProxy::builder(&connection).build().await
+            }
+            .await;
             let xdg_config = dirs::config_dir()
                 .map(|x| x.join("cosmic"))
                 .or_else(|| dirs::home_dir().map(|p| p.join(".config/cosmic")));
@@ -582,6 +615,7 @@ async fn main() -> zbus::Result<()> {
             let watched_states = Arc::new(RwLock::new(HashMap::new()));
             let settings_daemon = SettingsDaemon {
                 logind_session: logind_session.ok(),
+                a11y_session: a11y_session.ok().map(Mutex::new),
                 display_brightness_device,
                 watched_configs: watched_configs.clone(),
                 watched_states: watched_states.clone(),

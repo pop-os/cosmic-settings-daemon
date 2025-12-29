@@ -187,6 +187,8 @@ pub enum System {
     PlayPrev,
     /// Power off button handler
     PowerOff,
+    /// Toggles the screen reader
+    ScreenReader,
     /// Takes a screenshot
     Screenshot,
     /// Suspend the system
