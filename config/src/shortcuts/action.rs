@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MPL-2.0
 #![allow(deprecated)] // Derives on deprecated variants produce warnings...
 
+use std::str::FromStr;
+
 use serde::{Deserialize, Serialize};
 
 /// An operation which may be bound to a keyboard shortcut.
@@ -211,8 +213,39 @@ pub enum System {
     WorkspaceOverview,
 }
 
+/// Defines the number of fingers used for a gesture
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, Hash)]
+pub enum FingerCount {
+    Three,
+    Four,
+    Five,
+}
+
+impl From<FingerCount> for &'static str {
+    fn from(count: FingerCount) -> Self {
+        match count {
+            FingerCount::Three => "3",
+            FingerCount::Four => "4",
+            FingerCount::Five => "5",
+        }
+    }
+}
+
+impl FromStr for FingerCount {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "3" => Ok(Self::Three),
+            "4" => Ok(Self::Four),
+            "5" => Ok(Self::Five),
+            _ => return Err(format!("String {} cannot be converted to finger count.", s)),
+        }
+    }
+}
+
 /// Defines the direction of an operation
-#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize, Hash)]
 pub enum Direction {
     Left,
     Right,
@@ -228,6 +261,31 @@ impl std::ops::Not for Direction {
             Direction::Right => Direction::Left,
             Direction::Up => Direction::Down,
             Direction::Down => Direction::Up,
+        }
+    }
+}
+
+impl From<Direction> for &'static str {
+    fn from(direction: Direction) -> Self {
+        match direction {
+            Direction::Left => "Left",
+            Direction::Right => "Right",
+            Direction::Up => "Up",
+            Direction::Down => "Down",
+        }
+    }
+}
+
+impl FromStr for Direction {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Down" => Ok(Self::Down),
+            "Up" => Ok(Self::Up),
+            "Left" => Ok(Self::Left),
+            "Right" => Ok(Self::Right),
+            _ => return Err(format!("String {} cannot be converted to direction.", s)),
         }
     }
 }
