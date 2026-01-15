@@ -5,6 +5,7 @@ pub use action::Action;
 
 pub mod modifier;
 
+use action::Direction;
 pub use modifier::{Modifier, Modifiers, ModifiersDef};
 
 mod binding;
@@ -14,10 +15,13 @@ pub mod sym;
 
 use cosmic_config::cosmic_config_derive::CosmicConfigEntry;
 use cosmic_config::{ConfigGet, CosmicConfigEntry};
+use serde::de::Unexpected;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
-use xkbcommon::xkb;
+use sym::NO_SYMBOL;
+use xkbcommon::xkb::{self, Keysym};
 
 pub const ID: &str = "com.system76.CosmicSettings.Shortcuts";
 
@@ -74,6 +78,31 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
     config
 }
 
+/// Get a map of vim symbols and their configured directions
+pub fn vim_symbols(context: &cosmic_config::Config) -> VimSymbols {
+    let mut config = VimSymbols::default();
+
+    // Get the system config first
+    if let Ok(context) = cosmic_config::Config::system(ID, Config::VERSION) {
+        match context.get::<VimSymbolsImpl>("vim_symbols") {
+            Ok(vim_symbols) => config = vim_symbols.0,
+            Err(why) => {
+                tracing::error!("failed to read system shortcuts config 'vim_symbols': {why:?}")
+            }
+        }
+    }
+
+    // Then override it with the user's config
+    match context.get::<VimSymbolsImpl>("vim_symbols") {
+        Ok(user_config) => config.extend(user_config.0),
+        Err(why) => {
+            tracing::error!("failed to read local shortcuts config 'vim_symbols': {why:?}")
+        }
+    }
+
+    config
+}
+
 /// cosmic-config configuration state for `com.system76.CosmicSettings.Shortcuts`
 #[derive(Clone, Debug, Default, PartialEq, CosmicConfigEntry)]
 #[version = 1]
@@ -96,6 +125,79 @@ impl Config {
         self.custom
             .shortcut_for_action(action)
             .or_else(|| self.defaults.shortcut_for_action(action))
+    }
+}
+
+pub type VimSymbols = BTreeMap<Keysym, Direction>;
+
+struct VimSymbolsImpl(VimSymbols);
+
+impl Serialize for VimSymbolsImpl {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (k, v) in self.0.iter() {
+            map.serialize_entry(&xkb::keysym_get_name(k.clone()), &v)?;
+        }
+        map.end()
+    }
+}
+
+struct VimSymbolsVisitor;
+
+impl<'de> serde::de::Visitor<'de> for VimSymbolsVisitor {
+    type Value = VimSymbolsImpl;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("VimSymbols Map")
+    }
+
+    fn visit_map<A>(self, mut access: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::MapAccess<'de>,
+    {
+        let mut map = VimSymbols::new();
+
+        while let Some((keystring, dir)) =
+            access.next_entry::<&ron::value::RawValue, Direction>()?
+        {
+            match keystring.into_rust::<&str>() {
+                Ok(val) => {
+                    let key = match xkb::keysym_from_name(val, xkb::KEYSYM_NO_FLAGS) {
+                        x if x.raw() == NO_SYMBOL => {
+                            match xkb::keysym_from_name(val, xkb::KEYSYM_CASE_INSENSITIVE) {
+                        x if x.raw() == NO_SYMBOL => Err(<A::Error as serde::de::Error>::invalid_value(Unexpected::Str(val),&"One of the keysym names of xkbcommon.h without the 'KEY_' prefix")),
+                        x => Ok(Some(x))
+                    }
+                        }
+                        x => Ok(Some(x)),
+                    }?;
+                    if let Some(key) = key {
+                        map.insert(key, dir);
+                    }
+                }
+                Err(err) => {
+                    tracing::warn!(
+                        "Skipping over invalid Keysym ({}): {}",
+                        keystring.get_ron(),
+                        err
+                    );
+                }
+            }
+        }
+
+        Ok(VimSymbolsImpl(map))
+    }
+}
+
+impl<'de> Deserialize<'de> for VimSymbolsImpl {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_map(VimSymbolsVisitor)
     }
 }
 
