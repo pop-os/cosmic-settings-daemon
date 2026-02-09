@@ -37,6 +37,7 @@ mod logind_session;
 mod pipewire;
 mod pulse;
 mod theme;
+mod time;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
