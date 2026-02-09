@@ -17,8 +17,6 @@ use sunrise::{Coordinates, SolarDay, SolarEvent};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 
-use crate::time::TimeChange;
-
 #[derive(Debug)]
 pub struct SunriseSunset {
     last_update: DateTime<Local>,
@@ -496,10 +494,6 @@ pub async fn watch_theme(
                 let Some(time_change) = time_change else {
                     continue;
                 };
-                let reason = match time_change {
-                    TimeChange::WallClock => "wall clock change",
-                    TimeChange::Resume => "resume",
-                };
 
                 // Suspend/resume and wall-clock steps (NTP, manual) do not advance tokio's
                 // monotonic `Instant` the same way. Recompute sunrise/sunset instants so the next
@@ -511,7 +505,7 @@ pub async fn watch_theme(
                 match SunriseSunset::new(latitude, longitude, None) {
                     Ok(s) => sunrise_sunset = Some(s),
                     Err(err) => {
-                        log::error!("Failed to recalculate sunrise/sunset after {reason}: {err:?}");
+                        log::error!("Failed to recalculate sunrise/sunset after {time_change:?}: {err:?}");
                         sunrise_sunset = None;
                         continue;
                     }
@@ -538,7 +532,7 @@ pub async fn watch_theme(
 
                 if theme_mode.is_dark != is_dark {
                     if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
-                        log::error!("Failed to update theme mode after {reason}: {err:?}");
+                        log::error!("Failed to update theme mode after {time_change:?}: {err:?}");
                         continue;
                     }
 

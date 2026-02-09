@@ -4,7 +4,7 @@ use zbus::fdo::PropertiesProxy;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TimeChange {
     /// Wall clock changed (manual change, NTP step, etc).
-    WallClock,
+    WallClockChange,
     /// System resumed from suspend.
     Resume,
 }
@@ -117,7 +117,7 @@ pub async fn watch_time_changes() -> anyhow::Result<(
 
                             if args.interface_name == "org.freedesktop.timedate1" {
                                 // Best-effort: if the receiver is lagging, coalesce.
-                                let _ = tx.try_send(TimeChange::WallClock);
+                                let _ = tx.try_send(TimeChange::WallClockChange);
                             }
                         }
                     }
