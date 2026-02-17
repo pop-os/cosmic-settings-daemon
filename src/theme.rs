@@ -163,7 +163,7 @@ pub async fn watch_theme(
     let dark_helper = CosmicTheme::dark_config()?;
 
     if tk.apply_theme_global {
-        // Write the gtk variables for both themes in case they have changed in the meantime
+        // Write the exports for both themes in case they have changed in the meantime
         let dark = match Theme::get_active_with_brightness(true) {
             Ok(t) => t,
             Err((errs, t)) => {
@@ -193,14 +193,14 @@ pub async fn watch_theme(
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
             if let Err(err) = Theme::apply_exports_static(t.is_dark) {
-                log::error!("Failed to apply the theme to gtk. {err:?}");
+                log::error!("Failed to apply COSMIC theme exports. {err:?}");
             }
         }
 
         set_gnome_desktop_interface(theme_mode.is_dark);
     } else {
-        if let Err(err) = Theme::reset_gtk() {
-            log::error!("Failed to reset the application of the theme to gtk. {err:?}");
+        if let Err(err) = Theme::reset_exports() {
+            log::error!("Failed to reset the cosmic theme exports. {err:?}");
         }
     }
 
@@ -230,8 +230,8 @@ pub async fn watch_theme(
 
         tokio::select! {
             _ = sigterm_rx.recv() => {
-                if let Err(err) = Theme::reset_gtk() {
-                    log::error!("Failed to reset the application of the theme to gtk. {err:?}");
+                if let Err(err) = Theme::reset_exports() {
+                    log::error!("Failed to reset the cosmic theme exports. {err:?}");
                 }
                 cleanup_tx.send(()).await.unwrap();
             }
@@ -282,7 +282,7 @@ pub async fn watch_theme(
                             };
 
                             if let Err(err) = Theme::apply_exports_static(theme.is_dark) {
-                                log::error!("Failed to apply the theme to gtk. {err:?}");
+                                log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
@@ -308,7 +308,7 @@ pub async fn watch_theme(
                         }
 
                         if tk.apply_theme_global {
-                            // Write the gtk variables for both themes in case they have changed in the meantime
+                            // Write the exports for both themes in case they have changed in the meantime
                             let dark = match Theme::get_entry(&dark_helper) {
                                 Ok(t) => t,
                                 Err((errs, t)) => {
@@ -337,13 +337,13 @@ pub async fn watch_theme(
 
                             let t = if theme_mode.is_dark { dark } else { light };
                             if let Err(err) = Theme::apply_exports_static(t.is_dark) {
-                                log::error!("Failed to apply the theme to gtk. {err:?}");
+                                log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
                         } else {
-                            if let Err(err) = Theme::reset_gtk() {
-                                log::error!("Failed to reset the application of the theme to gtk. {err:?}");
+                            if let Err(err) = Theme::reset_exports() {
+                                log::error!("Failed to reset the cosmic theme exports. {err:?}");
                             }
                         }
                     },
@@ -363,7 +363,7 @@ pub async fn watch_theme(
                             };
                         if tk.apply_theme_global {
                             if let Err(err) = t.write_exports() {
-                                log::error!("Failed to write gtk4 css. {err:?}");
+                                log::error!("Failed to write COSMIC theme exports. {err:?}");
                             }
                             let theme_mode = match ThemeMode::get_entry(&helper) {
                                 Ok(t) => t,
@@ -376,7 +376,7 @@ pub async fn watch_theme(
                             };
                             if theme_mode.is_dark == is_dark {
                                 if let Err(err) = Theme::apply_exports_static(t.is_dark) {
-                                    log::error!("Failed to apply the theme to gtk. {err:?}");
+                                    log::error!("Failed to apply COSMIC theme exports. {err:?}");
                                 }
                             }
 
@@ -415,7 +415,7 @@ pub async fn watch_theme(
                         }
                     };
                     if let Err(err) = Theme::apply_exports_static(theme.is_dark) {
-                        log::error!("Failed to apply the theme to gtk. {err:?}");
+                        log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
@@ -477,7 +477,7 @@ pub async fn watch_theme(
                         }
                     };
                     if let Err(err) = Theme::apply_exports_static(theme.is_dark) {
-                        log::error!("Failed to apply the theme to gtk. {err:?}");
+                        log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
