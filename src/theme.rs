@@ -184,11 +184,7 @@ pub async fn watch_theme(
             }
         };
         _ = light.write_exports();
-        _ = std::process::Command::new("flatpak")
-            .arg("override")
-            .arg("--user")
-            .arg("--filesystem=xdg-config/gtk-4.0:ro")
-            .spawn();
+        set_flatpak_overrides();
 
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
@@ -329,11 +325,7 @@ pub async fn watch_theme(
                                 }
                             };
                             _ = light.write_exports();
-                            let _ = std::process::Command::new("flatpak")
-                                .arg("override")
-                                .arg("--user")
-                                .arg("--filesystem=xdg-config/gtk-4.0:ro")
-                                .spawn();
+                            set_flatpak_overrides();
 
                             let t = if theme_mode.is_dark { dark } else { light };
                             if let Err(err) = Theme::apply_exports_static(t.is_dark) {
@@ -554,4 +546,22 @@ fn set_gnome_icon_theme(theme: String) {
             .status()
             .await;
     });
+}
+
+fn set_flatpak_overrides() {
+    let paths_to_expose = vec![
+        "xdg-config/gtk-4.0:ro",
+        "xdg-config/gtk-3.0:ro",
+        "xdg-config/kdeglobals:ro",
+        "xdg-data/color-schemes:ro",
+    ];
+
+    for path in paths_to_expose {
+        _ = std::process::Command::new("flatpak")
+            .arg("override")
+            .arg("--user")
+            .arg("--filesystem")
+            .arg(path)
+            .spawn();
+    }
 }
