@@ -209,6 +209,12 @@ pub async fn watch_theme(
     let (_location_handle, location_updates) = crate::location::receive_timezones();
     futures::pin_mut!(location_updates);
 
+    let (_time_handle, time_changes) = crate::time::watch_time_changes().await?;
+    futures::pin_mut!(time_changes);
+
+    // Track the most-recent coordinates so we can recompute sunrise/sunset after suspend or
+    // wall-clock changes.
+    let mut coords: Option<(f64, f64)> = None;
     let mut sunrise_sunset: Option<SunriseSunset> = None;
     loop {
         let sunset_deadline =
@@ -440,6 +446,7 @@ pub async fn watch_theme(
                     continue;
                 };
 
+                coords = Some((latitude, longitude));
                 match SunriseSunset::new(latitude, longitude, None) {
                     Ok(s) => {
                         sunrise_sunset = Some(s);
@@ -481,6 +488,74 @@ pub async fn watch_theme(
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
+                }
+            }
+            time_change = time_changes.next() => {
+                let Some(time_change) = time_change else {
+                    continue;
+                };
+
+                // Suspend/resume and wall-clock steps (NTP, manual) do not advance tokio's
+                // monotonic `Instant` the same way. Recompute sunrise/sunset instants so the next
+                // sleep deadline and current day/night evaluation match wall-clock time.
+                let Some((latitude, longitude)) = coords else {
+                    continue;
+                };
+
+                match SunriseSunset::new(latitude, longitude, None) {
+                    Ok(s) => sunrise_sunset = Some(s),
+                    Err(err) => {
+                        log::error!("Failed to recalculate sunrise/sunset after {time_change:?}: {err:?}");
+                        sunrise_sunset = None;
+                        continue;
+                    }
+                };
+
+                // If auto-switch isn't enabled, keep the timer state fresh and bail.
+                if !theme_mode.auto_switch {
+                    continue;
+                }
+
+                let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
+                    continue;
+                };
+
+                // Expire manual override once the schedule catches up (important if we slept
+                // across the boundary).
+                if override_until_next && is_dark == theme_mode.is_dark {
+                    override_until_next = false;
+                }
+
+                if override_until_next {
+                    continue;
+                }
+
+                if theme_mode.is_dark != is_dark {
+                    if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
+                        log::error!("Failed to update theme mode after {time_change:?}: {err:?}");
+                        continue;
+                    }
+
+                    if tk.apply_theme_global {
+                        let theme = match if theme_mode.is_dark {
+                            Theme::get_entry(&dark_helper)
+                        } else {
+                            Theme::get_entry(&light_helper)
+                        } {
+                            Ok(t) => t,
+                            Err((errs, t)) => {
+                                for err in errs {
+                                    log::error!("{err}");
+                                }
+                                t
+                            }
+                        };
+                        if let Err(err) = Theme::apply_gtk(theme.is_dark) {
+                            log::error!("Failed to apply the theme to gtk. {err:?}");
+                        }
+
+                        set_gnome_desktop_interface(theme_mode.is_dark);
+                    }
                 }
             }
 
