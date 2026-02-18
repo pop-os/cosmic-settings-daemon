@@ -164,7 +164,7 @@ pub async fn watch_theme(
 
     if tk.apply_theme_global {
         // Write the exports for both themes in case they have changed in the meantime
-        let dark = match Theme::get_active_with_brightness(true) {
+        let dark = match Theme::get_entry(&dark_helper) {
             Ok(t) => t,
             Err((errs, t)) => {
                 for why in errs {
@@ -174,7 +174,7 @@ pub async fn watch_theme(
             }
         };
         _ = dark.write_exports();
-        let light = match Theme::get_active_with_brightness(false) {
+        let light = match Theme::get_entry(&light_helper) {
             Ok(t) => t,
             Err((errs, t)) => {
                 for why in errs {
