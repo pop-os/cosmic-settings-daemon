@@ -26,5 +26,6 @@ Depends:
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
+  breeze-icon-theme,
   playerctl,
 Description: Cosmic settings daemon
