@@ -556,12 +556,15 @@ fn set_flatpak_overrides() {
         "xdg-data/color-schemes:ro",
     ];
 
-    for path in paths_to_expose {
-        _ = std::process::Command::new("flatpak")
-            .arg("override")
-            .arg("--user")
-            .arg("--filesystem")
-            .arg(path)
-            .spawn();
-    }
+    tokio::spawn(async {
+        for path in paths_to_expose {
+            _ = tokio::process::Command::new("flatpak")
+                .arg("override")
+                .arg("--user")
+                .arg("--filesystem")
+                .arg(path)
+                .status()
+                .await;
+        }
+    });
 }
