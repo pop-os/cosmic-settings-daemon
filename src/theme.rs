@@ -188,7 +188,7 @@ pub async fn watch_theme(
 
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
-            if let Err(err) = Theme::apply_exports_static(t.is_dark) {
+            if let Err(err) = t.apply_exports() {
                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
             }
         }
@@ -277,7 +277,7 @@ pub async fn watch_theme(
                                 }
                             };
 
-                            if let Err(err) = Theme::apply_exports_static(theme.is_dark) {
+                            if let Err(err) = theme.apply_exports() {
                                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
@@ -328,7 +328,7 @@ pub async fn watch_theme(
                             set_flatpak_overrides();
 
                             let t = if theme_mode.is_dark { dark } else { light };
-                            if let Err(err) = Theme::apply_exports_static(t.is_dark) {
+                            if let Err(err) = t.apply_exports() {
                                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
@@ -367,7 +367,7 @@ pub async fn watch_theme(
                                 },
                             };
                             if theme_mode.is_dark == is_dark {
-                                if let Err(err) = Theme::apply_exports_static(t.is_dark) {
+                                if let Err(err) = t.apply_exports() {
                                     log::error!("Failed to apply COSMIC theme exports. {err:?}");
                                 }
                             }
@@ -406,7 +406,7 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = Theme::apply_exports_static(theme.is_dark) {
+                    if let Err(err) = theme.apply_exports() {
                         log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
@@ -468,7 +468,7 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = Theme::apply_exports_static(theme.is_dark) {
+                    if let Err(err) = theme.apply_exports() {
                         log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
