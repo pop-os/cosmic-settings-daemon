@@ -163,7 +163,7 @@ pub async fn watch_theme(
     let dark_helper = CosmicTheme::dark_config()?;
 
     if tk.apply_theme_global {
-        // Write the gtk variables for both themes in case they have changed in the meantime
+        // Write the exports for both themes in case they have changed in the meantime
         let dark = match Theme::get_entry(&dark_helper) {
             Ok(t) => t,
             Err((errs, t)) => {
@@ -173,7 +173,7 @@ pub async fn watch_theme(
                 t
             }
         };
-        _ = dark.write_gtk4();
+        _ = dark.write_exports();
         let light = match Theme::get_entry(&light_helper) {
             Ok(t) => t,
             Err((errs, t)) => {
@@ -183,24 +183,20 @@ pub async fn watch_theme(
                 t
             }
         };
-        _ = light.write_gtk4();
-        _ = std::process::Command::new("flatpak")
-            .arg("override")
-            .arg("--user")
-            .arg("--filesystem=xdg-config/gtk-4.0:ro")
-            .spawn();
+        _ = light.write_exports();
+        set_flatpak_overrides();
 
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
-            if let Err(err) = Theme::apply_gtk(t.is_dark) {
-                log::error!("Failed to apply the theme to gtk. {err:?}");
+            if let Err(err) = t.apply_exports() {
+                log::error!("Failed to apply COSMIC theme exports. {err:?}");
             }
         }
 
         set_gnome_desktop_interface(theme_mode.is_dark);
     } else {
-        if let Err(err) = Theme::reset_gtk() {
-            log::error!("Failed to reset the application of the theme to gtk. {err:?}");
+        if let Err(err) = Theme::reset_exports() {
+            log::error!("Failed to reset the cosmic theme exports. {err:?}");
         }
     }
 
@@ -236,8 +232,8 @@ pub async fn watch_theme(
 
         tokio::select! {
             _ = sigterm_rx.recv() => {
-                if let Err(err) = Theme::reset_gtk() {
-                    log::error!("Failed to reset the application of the theme to gtk. {err:?}");
+                if let Err(err) = Theme::reset_exports() {
+                    log::error!("Failed to reset the cosmic theme exports. {err:?}");
                 }
                 cleanup_tx.send(()).await.unwrap();
             }
@@ -287,8 +283,8 @@ pub async fn watch_theme(
                                 }
                             };
 
-                            if let Err(err) = Theme::apply_gtk(theme.is_dark) {
-                                log::error!("Failed to apply the theme to gtk. {err:?}");
+                            if let Err(err) = theme.apply_exports() {
+                                log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
@@ -314,7 +310,7 @@ pub async fn watch_theme(
                         }
 
                         if tk.apply_theme_global {
-                            // Write the gtk variables for both themes in case they have changed in the meantime
+                            // Write the exports for both themes in case they have changed in the meantime
                             let dark = match Theme::get_entry(&dark_helper) {
                                 Ok(t) => t,
                                 Err((errs, t)) => {
@@ -324,7 +320,7 @@ pub async fn watch_theme(
                                     t
                                 }
                             };
-                            _ = dark.write_gtk4();
+                            _ = dark.write_exports();
                             let light = match Theme::get_entry(&light_helper) {
                                 Ok(t) => t,
                                 Err((errs, t)) => {
@@ -334,22 +330,18 @@ pub async fn watch_theme(
                                     t
                                 }
                             };
-                            _ = light.write_gtk4();
-                            let _ = std::process::Command::new("flatpak")
-                                .arg("override")
-                                .arg("--user")
-                                .arg("--filesystem=xdg-config/gtk-4.0:ro")
-                                .spawn();
+                            _ = light.write_exports();
+                            set_flatpak_overrides();
 
                             let t = if theme_mode.is_dark { dark } else { light };
-                            if let Err(err) = Theme::apply_gtk(t.is_dark) {
-                                log::error!("Failed to apply the theme to gtk. {err:?}");
+                            if let Err(err) = t.apply_exports() {
+                                log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
                         } else {
-                            if let Err(err) = Theme::reset_gtk() {
-                                log::error!("Failed to reset the application of the theme to gtk. {err:?}");
+                            if let Err(err) = Theme::reset_exports() {
+                                log::error!("Failed to reset the cosmic theme exports. {err:?}");
                             }
                         }
                     },
@@ -368,8 +360,8 @@ pub async fn watch_theme(
                                 },
                             };
                         if tk.apply_theme_global {
-                            if let Err(err) = t.write_gtk4() {
-                                log::error!("Failed to write gtk4 css. {err:?}");
+                            if let Err(err) = t.write_exports() {
+                                log::error!("Failed to write COSMIC theme exports. {err:?}");
                             }
                             let theme_mode = match ThemeMode::get_entry(&helper) {
                                 Ok(t) => t,
@@ -381,8 +373,8 @@ pub async fn watch_theme(
                                 },
                             };
                             if theme_mode.is_dark == is_dark {
-                                if let Err(err) = Theme::apply_gtk(t.is_dark) {
-                                    log::error!("Failed to apply the theme to gtk. {err:?}");
+                                if let Err(err) = t.apply_exports() {
+                                    log::error!("Failed to apply COSMIC theme exports. {err:?}");
                                 }
                             }
 
@@ -420,8 +412,8 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = Theme::apply_gtk(theme.is_dark) {
-                        log::error!("Failed to apply the theme to gtk. {err:?}");
+                    if let Err(err) = theme.apply_exports() {
+                        log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
@@ -483,8 +475,8 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = Theme::apply_gtk(theme.is_dark) {
-                        log::error!("Failed to apply the theme to gtk. {err:?}");
+                    if let Err(err) = theme.apply_exports() {
+                        log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
                     set_gnome_desktop_interface(theme_mode.is_dark);
@@ -628,5 +620,26 @@ fn set_gnome_icon_theme(theme: String) {
             ])
             .status()
             .await;
+    });
+}
+
+fn set_flatpak_overrides() {
+    let paths_to_expose = vec![
+        "xdg-config/gtk-4.0:ro",
+        "xdg-config/gtk-3.0:ro",
+        "xdg-config/kdeglobals:ro",
+        "xdg-data/color-schemes:ro",
+    ];
+
+    tokio::spawn(async {
+        for path in paths_to_expose {
+            _ = tokio::process::Command::new("flatpak")
+                .arg("override")
+                .arg("--user")
+                .arg("--filesystem")
+                .arg(path)
+                .status()
+                .await;
+        }
     });
 }
