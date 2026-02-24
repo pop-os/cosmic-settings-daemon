@@ -294,4 +294,5 @@ pub enum TilingZone {
     BottomLeft,
     Left,
     TopLeft,
+    Center,
 }
