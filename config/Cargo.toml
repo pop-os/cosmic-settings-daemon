@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "iced-rebase" }
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3.14.0"
 tracing = "0.1.41"

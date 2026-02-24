@@ -8,14 +8,15 @@ license = "GPL-3.0-or-later"
 members = ["config", "cosmic-settings-daemon-config", "geonames"]
 
 [workspace.dependencies]
-cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic", branch = "iced-rebase" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic", branch = "iced-rebase" }
+
+# cosmic-config = { path = "../libcosmic/cosmic-config" }
+# cosmic-theme = { path = "../libcosmic/cosmic-theme" }
 
 
 [dependencies]
-cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", default-features = false, features = [
-    "pulse",
-] }
+cosmic-settings-pulse-subscription = { git = "https://github.com/pop-os/cosmic-settings", default-features = false, branch = "iced-rebase" }
 anyhow = "1.0.99"
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", features = [
     "greeter",
@@ -32,7 +33,7 @@ cosmic-theme.workspace = true
 cosmic-theme.export = true
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 chrono = "0.4.42"
-libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false }
+libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false, branch = "iced-rebase" }
 acpid_plug = "0.1.2"
 upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
@@ -49,7 +50,8 @@ log = "0.4.28"
 env_logger = "0.11.8"
 
 # For development and testing purposes
-# [patch.'https://github.com/pop-os/libcosmic']
-# libcosmic = { path = "../libcosmic" }
-# cosmic-config = { path = "../libcosmic/cosmic-config" }
-# cosmic-theme = { path = "../libcosmic/cosmic-theme" }
+[patch.'https://github.com/pop-os/libcosmic']
+libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "iced-rebase" }
+iced_futures = { git = "https://github.com/pop-os/libcosmic//", branch = "iced-rebase" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "iced-rebase" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "iced-rebase" }
