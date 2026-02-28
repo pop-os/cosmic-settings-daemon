@@ -298,13 +298,6 @@ impl SettingsDaemon {
         let limit = if amplification_enabled { "1.5" } else { "1.0" };
 
         if let Err(e) = self
-            .run_wpctl(&["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
-            .await
-        {
-            log::error!("Failed to unmute audio: {}", e);
-        }
-
-        if let Err(e) = self
             .run_wpctl(&["set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", "-l", limit])
             .await
         {
