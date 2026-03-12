@@ -1,0 +1,19 @@
+[package]
+name = "cosmic-settings-varlink-server"
+version = "1.0.0"
+edition = "2024"
+license = "GPL-3.0-only"
+publish = false
+
+[dependencies]
+cosmic-settings-audio-core = { path = "../audio-core"}
+cosmic-settings-audio-server = { path = "../audio-server" }
+dirs = "6.0.0"
+futures-util = "0.3.32"
+serde = "1.0.228"
+tokio = "1.49.0"
+tracing = "0.1.44"
+
+[dependencies.zlink]
+workspace = true
+features = ["idl", "introspection", "tokio", "tracing", "server", "service"]
