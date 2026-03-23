@@ -955,6 +955,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "zlink",
 ]
 
 [[package]]
