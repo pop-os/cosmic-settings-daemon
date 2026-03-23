@@ -316,6 +316,8 @@ mod tests {
 
     #[test]
     fn volume_round_up() {
+        assert_eq!(round_up(39, 5), 40);
+        assert_eq!(round_up(40, 5), 45);
         assert_eq!(round_up(50, 5), 55);
         assert_eq!(round_up(51, 5), 55);
         assert_eq!(round_up(52, 5), 55);

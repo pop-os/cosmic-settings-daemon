@@ -21,3 +21,6 @@ tokio-util = { version = "0.7.18", features = ["codec"] }
 futures-util = { version = "0.3.32", features = ["sink"] }
 tokio = { version = "1.47.1", features = ["fs", "macros", "process", "rt", "time"] }
 dirs = "6.0.0"
+
+[dev-dependencies]
+zlink = { workspace = true, features = ["tokio", "tracing"] }
