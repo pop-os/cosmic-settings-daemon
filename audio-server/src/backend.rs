@@ -435,7 +435,7 @@ impl Model {
                 if let Some(channel_volumes) = props.channel_volumes {
                     let (volume, balance) =
                         pipewire::volume::from_channel_volumes(&channel_volumes);
-                    let volume = (volume * 100.0) as u32;
+                    let volume = (volume * 100.0).round() as u32;
 
                     if is_active_sink {
                         self.sink_balance = balance;
