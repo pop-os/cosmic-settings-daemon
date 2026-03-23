@@ -7,7 +7,6 @@
 // - com.system76.CosmicConfig config, set_config, watch_config, state, set_state, watch_state,
 // - com.system76.CosmicSettings.Display increase_brightness, decrease_brightness, set_brightness, recv_brightness,
 // - com.system76.CosmicSettings.Keyboard increase_brightness, decrease_brightness, set_brightness, recv_brightness,
-// - com.system76.CosmicSettings.InputSources switch
 
 use cosmic_settings_audio_core as audio;
 use cosmic_settings_audio_server as audio_server;
@@ -50,8 +49,12 @@ impl<Sock> Daemon
 where
     Sock::ReadHalf: zlink::connection::socket::FetchPeerCredentials,
 {
-    #[zlink(interface = "com.system76.CosmicSettings.Audio", return_fds)]
-    pub async fn recv_events(&mut self) -> (Result<(), audio::Error>, Vec<OwnedFd>) {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "RecvEvents",
+        return_fds
+    )]
+    pub async fn audio_recv_events(&mut self) -> (Result<(), audio::Error>, Vec<OwnedFd>) {
         let mut fds = Vec::new();
         let mut this = self.0.lock().await;
         let reply = match this.audio_server.recv_events().await {
@@ -65,8 +68,11 @@ where
         (reply, fds)
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn default_sink(&mut self) -> Result<audio::Node, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "DefaultSink"
+    )]
+    pub async fn audio_default_sink(&mut self) -> Result<audio::Node, audio::Error> {
         self.0
             .lock()
             .await
@@ -76,8 +82,11 @@ where
             .ok_or(audio::Error::NoActiveSink)
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn default_source(&mut self) -> Result<audio::Node, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "DefaultSource"
+    )]
+    pub async fn audio_default_source(&mut self) -> Result<audio::Node, audio::Error> {
         self.0
             .lock()
             .await
@@ -87,13 +96,22 @@ where
             .ok_or(audio::Error::NoActiveSource)
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn sink_mute_toggle(&mut self) -> Result<audio::Mute, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SinkMuteToggle"
+    )]
+    pub async fn audio_sink_mute_toggle(&mut self) -> Result<audio::Mute, audio::Error> {
         self.0.lock().await.audio_server.sink_mute_toggle().await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn sink_volume_lower(&mut self, step: u32) -> Result<audio::Volume, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SinkVolumeLower"
+    )]
+    pub async fn audio_sink_volume_lower(
+        &mut self,
+        step: u32,
+    ) -> Result<audio::Volume, audio::Error> {
         self.0
             .lock()
             .await
@@ -102,8 +120,14 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn sink_volume_raise(&mut self, step: u32) -> Result<audio::Volume, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SinkVolumeRaise"
+    )]
+    pub async fn audio_sink_volume_raise(
+        &mut self,
+        step: u32,
+    ) -> Result<audio::Volume, audio::Error> {
         self.0
             .lock()
             .await
@@ -112,13 +136,22 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn source_mute_toggle(&mut self) -> Result<audio::Mute, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SourceMuteToggle"
+    )]
+    pub async fn audio_source_mute_toggle(&mut self) -> Result<audio::Mute, audio::Error> {
         self.0.lock().await.audio_server.source_mute_toggle().await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn source_volume_lower(&mut self, step: u32) -> Result<audio::Volume, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SourceVolumeLower"
+    )]
+    pub async fn audio_source_volume_lower(
+        &mut self,
+        step: u32,
+    ) -> Result<audio::Volume, audio::Error> {
         self.0
             .lock()
             .await
@@ -127,8 +160,14 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn source_volume_raise(&mut self, step: u32) -> Result<audio::Volume, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SourceVolumeRaise"
+    )]
+    pub async fn audio_source_volume_raise(
+        &mut self,
+        step: u32,
+    ) -> Result<audio::Volume, audio::Error> {
         self.0
             .lock()
             .await
@@ -137,8 +176,12 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_default(&mut self, node_id: u32, save: bool) -> Result<(), audio::Error> {
+    #[zlink(interface = "com.system76.CosmicSettings.Audio", rename = "SetDefault")]
+    pub async fn audio_set_default(
+        &mut self,
+        node_id: u32,
+        save: bool,
+    ) -> Result<(), audio::Error> {
         self.0
             .lock()
             .await
@@ -147,8 +190,8 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_profile(
+    #[zlink(interface = "com.system76.CosmicSettings.Audio", rename = "SetProfile")]
+    pub async fn audio_set_profile(
         &mut self,
         device_id: u32,
         profile_index: u32,
@@ -162,8 +205,14 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_sink_volume(&mut self, volume: u32) -> Result<audio::Volume, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetSinkVolume"
+    )]
+    pub async fn audio_set_sink_volume(
+        &mut self,
+        volume: u32,
+    ) -> Result<audio::Volume, audio::Error> {
         self.0
             .lock()
             .await
@@ -172,8 +221,14 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_source_volume(&mut self, volume: u32) -> Result<audio::Volume, audio::Error> {
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetSourceVolume"
+    )]
+    pub async fn audio_set_source_volume(
+        &mut self,
+        volume: u32,
+    ) -> Result<audio::Volume, audio::Error> {
         self.0
             .lock()
             .await
@@ -182,8 +237,11 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_node_mute(
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetNodeMute"
+    )]
+    pub async fn audio_set_node_mute(
         &mut self,
         node_id: u32,
         mute: bool,
@@ -196,8 +254,11 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_node_volume(
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetNodeVolume"
+    )]
+    pub async fn audio_set_node_volume(
         &mut self,
         node_id: u32,
         volume: u32,
@@ -210,8 +271,11 @@ where
             .await
     }
 
-    #[zlink(interface = "com.system76.CosmicSettings.Audio")]
-    pub async fn set_node_volume_balance(
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetNodeVolumeBalance"
+    )]
+    pub async fn audio_set_node_volume_balance(
         &mut self,
         node_id: u32,
         balance: Option<f32>,
