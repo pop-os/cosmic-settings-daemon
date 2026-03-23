@@ -50,6 +50,7 @@ env_logger = "0.11.8"
 
 # For development and testing purposes
 [patch.'https://github.com/pop-os/libcosmic']
-libcosmic = { git = "https://github.com/adil192/libcosmic", rev = "9f330cb56aafcd43bf3b0d4ade1fae0b286e6e23" }
-cosmic-config = { git = "https://github.com/adil192/libcosmic", rev = "9f330cb56aafcd43bf3b0d4ade1fae0b286e6e23" }
-cosmic-theme = { git = "https://github.com/adil192/libcosmic", rev = "9f330cb56aafcd43bf3b0d4ade1fae0b286e6e23" }
+libcosmic = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
+cosmic-config = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
+cosmic-theme = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
+iced_futures = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
