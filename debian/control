@@ -20,7 +20,6 @@ Architecture: amd64 arm64
 Depends:
   acpid,
   adw-gtk3,
-  qt6ct,
   pop-sound-theme,
   ${misc:Depends},
   ${shlibs:Depends}
@@ -28,4 +27,5 @@ Recommends:
   breeze-icon-theme,
   playerctl,
   qt5ct,
+  qt6ct,
 Description: Cosmic settings daemon
