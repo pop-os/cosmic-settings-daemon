@@ -7,7 +7,7 @@ use std::{
 use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDaemonState};
 
 use cosmic_config::CosmicConfigEntry;
-use cosmic_settings_subscriptions::pulse::{self, Availability, PortType};
+use cosmic_settings_pulse_subscription::{self as pulse, Availability, PortType};
 use futures::StreamExt;
 
 pub const VIRT_MONO: &'static str = "COSMIC_mono_sink";

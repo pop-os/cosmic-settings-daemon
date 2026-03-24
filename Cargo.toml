@@ -11,11 +11,12 @@ members = ["config", "cosmic-settings-daemon-config", "geonames"]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
 
+# cosmic-config = { path = "../libcosmic/cosmic-config" }
+# cosmic-theme = { path = "../libcosmic/cosmic-theme" }
+
 
 [dependencies]
-cosmic-settings-subscriptions = { git = "https://github.com/pop-os/cosmic-settings-subscriptions", default-features = false, features = [
-    "pulse",
-] }
+cosmic-settings-pulse-subscription = { git = "https://github.com/pop-os/cosmic-settings", default-features = false }
 anyhow = "1.0.99"
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", features = [
     "greeter",
@@ -50,7 +51,7 @@ env_logger = "0.11.8"
 
 # For development and testing purposes
 [patch.'https://github.com/pop-os/libcosmic']
-libcosmic = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
-cosmic-config = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
-cosmic-theme = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
-iced_futures = { git = "https://github.com/adil192/libcosmic", rev = "490090878b0f5ac0fc919e1d65e4739f23a239d7" }
+libcosmic = { git = "https://github.com/adil192/libcosmic", rev = "db35a10c645a9863a47166aa939f7cfd2c94aa6a" }
+iced_futures = { git = "https://github.com/adil192/libcosmic", rev = "db35a10c645a9863a47166aa939f7cfd2c94aa6a" }
+cosmic-config = { git = "https://github.com/adil192/libcosmic", rev = "db35a10c645a9863a47166aa939f7cfd2c94aa6a" }
+cosmic-theme = { git = "https://github.com/adil192/libcosmic", rev = "db35a10c645a9863a47166aa939f7cfd2c94aa6a" }
