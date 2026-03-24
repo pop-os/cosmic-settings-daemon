@@ -112,8 +112,10 @@ impl Binding {
         (self.has_modifier() && self.key.is_some())
             || self.is_super()
             || self.key.map_or(false, |key| {
-                // Allow Home/End, Print, PageDown/Up, etc.
-                key.is_misc_function_key()
+                // Allow F1-F24 function keys
+                key.is_function_key()
+                    // Allow Home/End, Print, PageDown/Up, etc.
+                    || key.is_misc_function_key()
                     // XF86 keysym range
                     || matches!(key.raw(), 0x10080001..=0x1008FFFF)
             })
