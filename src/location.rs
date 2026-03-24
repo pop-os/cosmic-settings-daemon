@@ -4,14 +4,14 @@ use futures::{Stream, StreamExt};
 pub use geonames::GeoPosition;
 use notify::{PollWatcher, RecursiveMode, Watcher};
 
-static GEODATA: &'static [u8] = include_bytes!("../data/timezone-geodata.bitcode-v0-6");
+static GEODATA: &[u8] = include_bytes!("../data/timezone-geodata.bitcode-v0-6");
 
 /// Decodes the embedded geodata containing the largest cities nearest each timezone.
 pub fn decode_geodata() -> BTreeMap<String, GeoPosition> {
     match geonames::bitcode::decode(GEODATA) {
         Ok(ok) => ok,
         Err(err) => {
-            log::error!("failed to decode timezone geodata: {}", err.to_string());
+            log::error!("failed to decode timezone geodata: {}", err);
             BTreeMap::new()
         }
     }

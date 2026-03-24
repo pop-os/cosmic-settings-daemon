@@ -10,7 +10,7 @@ use cosmic_config::CosmicConfigEntry;
 use cosmic_settings_pulse_subscription::{self as pulse, Availability, PortType};
 use futures::StreamExt;
 
-pub const VIRT_MONO: &'static str = "COSMIC_mono_sink";
+pub const VIRT_MONO: &str = "COSMIC_mono_sink";
 
 async fn load_virt_mono(sink: &str) -> anyhow::Result<String> {
     let output = tokio::process::Command::new("pactl")
@@ -44,9 +44,7 @@ async fn get_virt_sink_id() -> anyhow::Result<Option<String>> {
     let output = String::from_utf8(output.stdout)?;
     Ok(output.lines().into_iter().find_map(|l| {
         let mut split = l.split_whitespace();
-        let Some(id) = split.next() else {
-            return None;
-        };
+        let id = split.next()?;
         split
             .nth(1)
             .is_some_and(|name| name.contains(VIRT_MONO))
@@ -128,12 +126,10 @@ pub(crate) async fn pulse(
                         log::error!("Failed to enable mono sound: {err:?}");
                         continue;
                     }
-                } else {
-                    if let Err(err) = cur_state.disable_mono(&state.default_sink_name).await {
-                        retry += 1;
-                        log::error!("Failed to disable mono sound: {err:?}");
-                        continue;
-                    }
+                } else if let Err(err) = cur_state.disable_mono(&state.default_sink_name).await {
+                    retry += 1;
+                    log::error!("Failed to disable mono sound: {err:?}");
+                    continue;
                 }
                 mono_change = false;
             } else if sink_change {
@@ -264,7 +260,7 @@ pub(crate) async fn pulse(
 
         retry = 0;
     }
-    if let Err(_) = tokio::time::timeout(Duration::from_secs(10), kill_rx).await {
+    if (tokio::time::timeout(Duration::from_secs(10), kill_rx).await).is_err() {
         log::error!("Pulse thread did not exit...");
         std::process::exit(1);
     }
@@ -272,6 +268,7 @@ pub(crate) async fn pulse(
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::enum_variant_names)] // allow same postfix, prevent breaking imported code.
 pub enum State {
     NoVirtMonoDisabledMono,
     DisabledMono(String),
@@ -286,12 +283,10 @@ impl State {
             } else {
                 State::NoVirtMonoEnabledMono
             }
+        } else if let Some(virt_sink) = virt_sink {
+            State::DisabledMono(virt_sink)
         } else {
-            if let Some(virt_sink) = virt_sink {
-                State::DisabledMono(virt_sink)
-            } else {
-                State::NoVirtMonoDisabledMono
-            }
+            State::NoVirtMonoDisabledMono
         }
     }
 
