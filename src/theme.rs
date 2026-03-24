@@ -144,11 +144,11 @@ pub async fn watch_theme(
         Ok(t) => t,
         Err((errs, t)) => {
             for why in errs {
-                if let cosmic_config::Error::GetKey(_, err) = &why {
-                    if err.kind() == std::io::ErrorKind::NotFound {
-                        // No system default config installed; don't error
-                        continue;
-                    }
+                if let cosmic_config::Error::GetKey(_, err) = &why
+                    && err.kind() == std::io::ErrorKind::NotFound
+                {
+                    // No system default config installed; don't error
+                    continue;
                 }
                 log::error!("{why}");
             }
@@ -194,10 +194,8 @@ pub async fn watch_theme(
         }
 
         set_gnome_desktop_interface(theme_mode.is_dark);
-    } else {
-        if let Err(err) = Theme::reset_exports() {
-            log::error!("Failed to reset the cosmic theme exports. {err:?}");
-        }
+    } else if let Err(err) = Theme::reset_exports() {
+        log::error!("Failed to reset the cosmic theme exports. {err:?}");
     }
 
     // TODO allow preference for config file instead?
@@ -214,7 +212,7 @@ pub async fn watch_theme(
     let mut sunrise_sunset: Option<SunriseSunset> = None;
     loop {
         let sunset_deadline =
-            if let Some(Some(s)) = theme_mode.auto_switch.then(|| sunrise_sunset.as_mut()) {
+            if let Some(Some(s)) = theme_mode.auto_switch.then_some(sunrise_sunset.as_mut()) {
                 Some(s.update_next()?)
             } else {
                 None
@@ -252,11 +250,7 @@ pub async fn watch_theme(
                             log::error!("Error updating the theme mode {err:?}");
                         }
 
-                        if sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark)) {
-                            override_until_next = true;
-                        } else {
-                            override_until_next = false;
-                        }
+                        override_until_next = sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark));
 
                         if theme_mode.auto_switch && !auto_switch_prev {
                             let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
@@ -339,10 +333,8 @@ pub async fn watch_theme(
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
-                        } else {
-                            if let Err(err) = Theme::reset_exports() {
-                                log::error!("Failed to reset the cosmic theme exports. {err:?}");
-                            }
+                        } else if let Err(err) = Theme::reset_exports() {
+                            log::error!("Failed to reset the cosmic theme exports. {err:?}");
                         }
                     },
                     ThemeMsg::Theme(is_dark) => {
@@ -372,10 +364,9 @@ pub async fn watch_theme(
                                     t
                                 },
                             };
-                            if theme_mode.is_dark == is_dark {
-                                if let Err(err) = t.apply_exports() {
+                            if theme_mode.is_dark == is_dark &&
+                                let Err(err) = t.apply_exports() {
                                     log::error!("Failed to apply COSMIC theme exports. {err:?}");
-                                }
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
@@ -565,7 +556,7 @@ fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {
         };
 
         let _res = tokio::process::Command::new("gsettings")
-            .args(&[
+            .args([
                 "set",
                 "org.gnome.desktop.wm.preferences",
                 "button-layout",
@@ -589,7 +580,7 @@ fn set_gnome_desktop_interface(is_dark: bool) {
 
     tokio::spawn(async {
         let _res = tokio::process::Command::new("gsettings")
-            .args(&[
+            .args([
                 "set",
                 "org.gnome.desktop.interface",
                 "color-scheme",
@@ -602,7 +593,7 @@ fn set_gnome_desktop_interface(is_dark: bool) {
     if Path::new(adw_theme_path).exists() {
         tokio::spawn(async {
             let _res = tokio::process::Command::new("gsettings")
-                .args(&["set", "org.gnome.desktop.interface", "gtk-theme", adw_theme])
+                .args(["set", "org.gnome.desktop.interface", "gtk-theme", adw_theme])
                 .status()
                 .await;
         });
@@ -612,7 +603,7 @@ fn set_gnome_desktop_interface(is_dark: bool) {
 fn set_gnome_icon_theme(theme: String) {
     tokio::spawn(async move {
         let _res = tokio::process::Command::new("gsettings")
-            .args(&[
+            .args([
                 "set",
                 "org.gnome.desktop.interface",
                 "icon-theme",

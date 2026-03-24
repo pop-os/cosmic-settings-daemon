@@ -28,11 +28,14 @@ impl BrightnessDevice {
     pub async fn brightness(&self) -> io::Result<u32> {
         let path = format!("/sys/class/{}/{}/brightness", self.subsystem, &self.sysname);
         let value = fs::read_to_string(&path).await?;
-        Ok(u32::from_str(value.trim()).map_err(invalid_data)?)
+        u32::from_str(value.trim()).map_err(invalid_data)
     }
 
     async fn actual_brightness(&self) -> io::Result<Option<u32>> {
-        let path = format!("/sys/class/{}/{}/actual_brightness", self.subsystem, &self.sysname);
+        let path = format!(
+            "/sys/class/{}/{}/actual_brightness",
+            self.subsystem, &self.sysname
+        );
         match fs::read_to_string(&path).await {
             Ok(s) => Ok(Some(u32::from_str(s.trim()).map_err(invalid_data)?)),
             Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(None),
@@ -127,6 +130,7 @@ impl BrightnessDevice {
             .set_brightness(self.subsystem, &self.sysname, clamped)
             .await?;
         // If panel still effectively off (e.g., OLED 0..3), bump minimally until visible.
-        self.ensure_visible_after_write(logind_session, clamped).await
+        self.ensure_visible_after_write(logind_session, clamped)
+            .await
     }
 }

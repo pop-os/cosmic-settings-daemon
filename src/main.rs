@@ -144,20 +144,26 @@ fn raw_from_step_index(step_index: i32, max_raw: i32) -> i32 {
 // Min=0 or 1 is enforced in brightness_device.rs; we just choose the target here.
 #[inline]
 fn next_target_raw(raw: i32, max_raw: i32, dir: i8) -> i32 {
-    if max_raw <= 0 { return raw; }
+    if max_raw <= 0 {
+        return raw;
+    }
 
     if dir > 0 {
         // Increase: smallest setpoint strictly > raw
         for k in 0..=20 {
             let sp = raw_from_step_index(k, max_raw);
-            if sp > raw { return sp; }
+            if sp > raw {
+                return sp;
+            }
         }
         max_raw
     } else {
         // Decrease: largest setpoint strictly < raw
         for k in (0..=20).rev() {
             let sp = raw_from_step_index(k, max_raw);
-            if sp < raw { return sp; }
+            if sp < raw {
+                return sp;
+            }
         }
         0
     }
@@ -198,16 +204,16 @@ impl SettingsDaemon {
 
     #[zbus(property)]
     async fn set_display_brightness(&self, value: i32) {
-        if let Some(logind_session) = self.logind_session.as_ref() {
-            if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-                // Align with slider behavior and device clamp: floor at 1 for backlight
-                let max = brightness_device.max_brightness() as i32;
-                let min = brightness_device.min_brightness() as i32;
-                let clamped = value.clamp(min, max);
-                _ = brightness_device
-                    .set_brightness(logind_session, clamped as u32)
-                    .await;
-            }
+        if let Some(logind_session) = self.logind_session.as_ref()
+            && let Some(brightness_device) = self.display_brightness_device.as_ref()
+        {
+            // Align with slider behavior and device clamp: floor at 1 for backlight
+            let max = brightness_device.max_brightness() as i32;
+            let min = brightness_device.min_brightness() as i32;
+            let clamped = value.clamp(min, max);
+            _ = brightness_device
+                .set_brightness(logind_session, clamped as u32)
+                .await;
         }
     }
 
@@ -267,7 +273,6 @@ impl SettingsDaemon {
                 log::error!(
                     "Failed to toggle screen reader. Could not apply current state. {err:?}"
                 );
-                return;
             }
         } else {
             log::error!("Failed to toggle screen reader.")
@@ -340,10 +345,9 @@ impl SettingsDaemon {
         if output.status.success() {
             Ok(())
         } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                String::from_utf8_lossy(&output.stderr),
-            ))
+            Err(std::io::Error::other(String::from_utf8_lossy(
+                &output.stderr,
+            )))
         }
     }
 
@@ -602,15 +606,13 @@ async fn main() -> zbus::Result<()> {
                 })
                 .expect("Failed to create notify watcher");
 
-            if let Some(xdg_config) = xdg_config {
-                if let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
+            if let Some(xdg_config) = xdg_config
+                && let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
                     log::error!("Failed to watch xdg config dir: {}", err);
-                }
             }
-            if let Some(xdg_state) = xdg_state {
-                if let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive) {
+            if let Some(xdg_state) = xdg_state
+                && let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive) {
                     log::error!("Failed to watch xdg state dir: {}", err);
-                }
             }
             let watched_configs = Arc::new(RwLock::new(HashMap::new()));
             let watched_states = Arc::new(RwLock::new(HashMap::new()));
@@ -726,10 +728,9 @@ async fn main() -> zbus::Result<()> {
                                 if let Err(err) = xkb_tx.send(()).await {
                                     log::error!("Failed to send xkb layout update: {err:?}");
                                 }
-                            } else if id.as_str() == cosmic_settings_daemon_config::NAME {
-                                if let Err(err) = tokio::time::timeout(Duration::from_secs(1), pulse_tx.send(())).await {
+                            } else if id.as_str() == cosmic_settings_daemon_config::NAME
+                                && let Err(err) = tokio::time::timeout(Duration::from_secs(1), pulse_tx.send(())).await {
                                     log::error!("Failed to send cosmic_settings_daemon_config update to pulse: {err:?}");
-                                }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;
                             let Some((conn, path, _)) = read_guard.get(&(id.to_string(), version))
