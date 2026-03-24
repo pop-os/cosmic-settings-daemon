@@ -112,10 +112,7 @@ impl Binding {
         (self.has_modifier() && self.key.is_some())
             || self.is_super()
             || self.key.map_or(false, |key| {
-                // Allow Home/End, Print, PageDown/Up, etc.
-                key.is_misc_function_key()
-                    // XF86 keysym range
-                    || matches!(key.raw(), 0x10080001..=0x1008FFFF)
+                !is_forbidden_unmodified_keysym(key)
             })
     }
 
@@ -298,4 +295,41 @@ mod tests {
         // At least one key is required.
         assert!(matches!(Binding::from_str(" "), Err(_)));
     }
+}
+
+pub fn is_forbidden_unmodified_keysym(key: xkb::Keysym) -> bool {
+    let raw = key.raw();
+    matches!(raw,
+        0x0041..=0x005a   | // A-Z
+        0x0061..=0x007a   | // a-z
+        0x0030..=0x0039   | // 0-9
+        0x0020            | // Space
+        0xff09            | // Tab
+        0xfe20            | // ISO_Left_Tab
+        0xff89            | // KP_Tab
+        0xff0d            | // Return
+        0xff8d            | // KP_Enter
+        0xff7e            | // Mode_switch
+        0xff14            | // Scroll_Lock
+        0xff15            | // Sys_Req
+        0xff20            | // Multi_key (Compose)
+        0xff7f            | // Num_Lock
+        0xffe5            | // Caps_Lock
+        0xfe01            | // ISO_Lock
+        0xfe08            | // ISO_Next_Group
+        0xfe0a            | // ISO_Prev_Group
+        0xfe0c            | // ISO_First_Group
+        0xfe0e            | // ISO_Last_Group
+        0xfed0..=0xfed2   | // First/Prev/Next_Virtual_Screen
+        0xfed4            | // Last_Virtual_Screen
+        0xfed5            | // Terminate_Server
+        0xfe7a            | // AudibleBell_Enable
+        0x04a1..=0x04df   | // Kana (Japanese)
+        0x05ac..=0x05f2   | // Arabic
+        0x06a1..=0x06ff   | // Cyrillic
+        0x07a1..=0x07f9   | // Greek
+        0x0cdf..=0x0cfa   | // Hebrew
+        0x0da1..=0x0df9   | // Thai
+        0x0ea1..=0x0efa     // Hangul (Korean)
+    )
 }
