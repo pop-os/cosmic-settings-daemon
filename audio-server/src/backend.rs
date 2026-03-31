@@ -630,7 +630,9 @@ impl Model {
                         ProfileClass::AudioSink {
                             card_profile_devices,
                         } => Some(card_profile_devices),
-                        _ => None,
+                        ProfileClass::AudioSource {
+                            card_profile_devices,
+                        } => Some(card_profile_devices),
                     }) {
                         let routes = self.device_routes.get(id);
                         'outer: for device in sink_devices {
