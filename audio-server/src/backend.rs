@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use cosmic_config::ConfigSet;
-use cosmic_pipewire::{self as pipewire, Direction, ProfileClass};
+use cosmic_pipewire::{self as pipewire, Direction, PortType, ProfileClass};
 use cosmic_settings_audio_core::Event;
 use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDaemonState};
 use futures_util::{SinkExt, StreamExt};
@@ -655,6 +655,35 @@ impl Model {
                                         }
                                         break 'outer;
                                     } else if route.icon_name.starts_with("audio-headset") {
+                                        let current = &mut headset_profiles.headset;
+                                        if current
+                                            .as_ref()
+                                            .map_or(true, |c| c.priority < profile.priority as u32)
+                                        {
+                                            *current = Some(HeadsetProfile {
+                                                priority: profile.priority as u32,
+                                                index: profile.index as u32,
+                                            });
+                                        }
+
+                                        break 'outer;
+                                    } else if matches!(route.port_type, PortType::Headphones) {
+                                        let current = &mut headset_profiles.headphone;
+
+                                        if current
+                                            .as_ref()
+                                            .map_or(true, |c| c.priority > profile.priority as u32)
+                                        {
+                                            *current = Some(HeadsetProfile {
+                                                priority: profile.priority as u32,
+                                                index: profile.index as u32,
+                                            });
+                                        }
+                                        break 'outer;
+                                    } else if matches!(
+                                        route.port_type,
+                                        PortType::Headset | PortType::Handset | PortType::Handsfree
+                                    ) {
                                         let current = &mut headset_profiles.headset;
                                         if current
                                             .as_ref()
