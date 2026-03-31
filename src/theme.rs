@@ -632,6 +632,12 @@ fn set_flatpak_overrides() {
     ];
 
     tokio::spawn(async {
+        _ = tokio::process::Command::new("flatpak")
+            .arg("override")
+            .arg("--user")
+            .arg("--env=QT_QPA_PLATFORMTHEME=kde")
+            .status()
+            .await;
         for path in paths_to_expose {
             _ = tokio::process::Command::new("flatpak")
                 .arg("override")
