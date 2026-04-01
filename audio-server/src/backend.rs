@@ -505,25 +505,37 @@ impl Model {
                     let headset_port_name = headset_route.name.clone();
                     self.device_headset_check.remove(&id);
 
-                    tracing::debug!(
-                        target: "audio-backend",
-                        "cosmic-osd confirm-headphones {device_name}, {headphone_profile_name}, {headset_profile_name}, {headset_port_name}"
-                    );
+                    // Avoid headset detections if the session has just started.
+                    if Instant::now()
+                        .duration_since(*INITIATED_TIME.get().unwrap())
+                        .as_secs()
+                        > 1
+                    {
+                        tracing::debug!(
+                            target: "audio-backend",
+                            "cosmic-osd confirm-headphones {device_name}, {headphone_profile_name}, {headset_profile_name}, {headset_port_name}"
+                        );
 
-                    tokio::spawn(async move {
-                        _ = tokio::process::Command::new("cosmic-osd")
-                            .arg("confirm-headphones")
-                            .arg("--card-name")
-                            .arg(&device_name)
-                            .arg("--headphone-profile")
-                            .arg(&headphone_profile_name)
-                            .arg("--headset-profile")
-                            .arg(&headset_profile_name)
-                            .arg("--headset-port-name")
-                            .arg(&headset_port_name)
-                            .status()
-                            .await;
-                    });
+                        tokio::spawn(async move {
+                            _ = tokio::process::Command::new("cosmic-osd")
+                                .arg("confirm-headphones")
+                                .arg("--card-name")
+                                .arg(&device_name)
+                                .arg("--headphone-profile")
+                                .arg(&headphone_profile_name)
+                                .arg("--headset-profile")
+                                .arg(&headset_profile_name)
+                                .arg("--headset-port-name")
+                                .arg(&headset_port_name)
+                                .status()
+                                .await;
+                        });
+                    } else {
+                        tracing::debug!(
+                            target: "audio-backend",
+                            "detected headset but ignoring for initial session startup"
+                        );
+                    }
                 }
 
                 self.active_profiles.insert(id, profile);
@@ -759,15 +771,7 @@ impl Model {
                     icon_name: device.icon_name,
                 };
 
-                // Avoid checks if the session has just started.
-                if Instant::now()
-                    .duration_since(*INITIATED_TIME.get().unwrap())
-                    .as_secs()
-                    > 1
-                {
-                    self.device_headset_check.insert(device.id);
-                }
-
+                self.device_headset_check.insert(device.id);
                 self.device_info.insert(device.id, info.clone());
                 self.emit_event(Event::Device(device.id, info)).await;
             }
