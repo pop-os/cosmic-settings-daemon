@@ -642,14 +642,15 @@ impl Model {
                             card_profile_devices,
                         } => Some(card_profile_devices),
                     }) {
-                        let routes = self.device_routes.get(id);
-                        'outer: for device in sink_devices {
+                        let routes = dbg!(self.device_routes.get(id));
+                        'outer: for device in dbg!(sink_devices) {
                             for route in routes.into_iter().flatten() {
+                                tracing::debug!(target: "audio-backend", "checking if route is headset or headphone device: {route:#?}");
                                 if matches!(
                                     route.available,
                                     Availability::Yes | Availability::Unknown
-                                ) && route.devices.contains(&device)
-                                    && route.profiles.contains(&profile.index)
+                                ) && dbg!(route.devices.contains(&device))
+                                    && dbg!(route.profiles.contains(&profile.index))
                                 {
                                     if route.icon_name.starts_with("audio-headphones") {
                                         let current = &mut headset_profiles.headphone;
@@ -722,12 +723,13 @@ impl Model {
 
             pipewire::Event::AddRoute(id, index, route) => {
                 tracing::debug!(target: "audio-backend",
-                    "Device {} added route {:?} {} ({}) {:?}",
+                    "Device {} added route {:?} {} ({}), profiles = {:?}, devices = {:?}",
                     id,
                     route.direction,
                     route.name,
                     route.description,
                     route.profiles,
+                    route.devices,
                 );
 
                 self.emit_event(Event::Route(id, index, pipewire_route_to_cosmic(&route)))
