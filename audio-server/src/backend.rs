@@ -491,6 +491,10 @@ impl Model {
                     && let Some(routes) = dbg!(self.device_routes.get(id))
                     && let Some(headset_route) = dbg!(routes.iter().find(|r| {
                         matches!(r.direction, Direction::Input)
+                            && matches!(
+                                r.port_type,
+                                PortType::Headset | PortType::Handset | PortType::Handsfree
+                            )
                             && matches!(r.available, Availability::Yes | Availability::Unknown)
                             && r.profiles.contains(&(headset_profile.index as i32))
                     }))
