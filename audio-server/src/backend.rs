@@ -763,7 +763,7 @@ impl Model {
                 if Instant::now()
                     .duration_since(*INITIATED_TIME.get().unwrap())
                     .as_secs()
-                    > 3
+                    > 1
                 {
                     self.device_headset_check.insert(device.id);
                 }
