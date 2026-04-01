@@ -645,7 +645,7 @@ impl Model {
                         let routes = dbg!(self.device_routes.get(id));
                         'outer: for device in dbg!(sink_devices) {
                             for route in routes.into_iter().flatten() {
-                                tracing::debug!(target: "audio-backend", "checking if route is headset or headphone device: {route:#?}");
+                                tracing::debug!(target: "audio-backend", "checking if route is headset or headphone device matching device {device}: {route:#?}");
                                 if matches!(
                                     route.available,
                                     Availability::Yes | Availability::Unknown
