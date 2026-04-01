@@ -73,7 +73,7 @@ pub struct Model {
     /// Tracking headset and headphone profiles
     device_headset_profiles: IntMap<DeviceId, HeadsetProfiles>,
     /// Check if a newly-added device requires an OSD dialog.
-    device_headset_check: HashSet<DeviceId>,
+    device_headset_check: IntMap<DeviceId, Option<i32>>,
     /// Track which profile is currently assigned to each device.
     active_profiles: IntMap<DeviceId, pipewire::Profile>,
     /// Track which routes are currently active on each device.
@@ -472,7 +472,7 @@ impl Model {
                     .await;
                 }
 
-                if let Some(id) = dbg!(self.device_headset_check.get(&id).cloned())
+                if let Some(prev_headset_port) = dbg!(self.device_headset_check.get(id).cloned())
                     && let Some(headset_profiles) = dbg!(self.device_headset_profiles.remove(id))
                     && let Some((headphone_info, headset_info)) =
                         dbg!(headset_profiles.headphone).zip(dbg!(headset_profiles.headset))
@@ -499,11 +499,23 @@ impl Model {
                             && r.profiles.contains(&(headset_profile.index as i32))
                     }))
                 {
+                    if prev_headset_port == Some(headset_route.index) {
+                        tracing::debug!(
+                            target: "audio-backend",
+                            "detected headset but ignoring due to previous selection"
+                        );
+
+                        self.active_profiles.insert(id, profile);
+                        return;
+                    }
+
                     let device_name = device_info.name.clone();
                     let headphone_profile_name = headphone_profile.name.clone();
                     let headset_profile_name = headset_profile.name.clone();
                     let headset_port_name = headset_route.name.clone();
-                    self.device_headset_check.remove(&id);
+
+                    self.device_headset_check
+                        .insert(id, Some(headset_route.index));
 
                     // Avoid headset detections if the session has just started.
                     if Instant::now()
@@ -621,16 +633,6 @@ impl Model {
                         index,
                         pipewire_profile_to_cosmic(&profile),
                     ));
-                }
-
-                // No need to check headset/headphone profiles if we've detected a headset.
-                if !self.device_headset_check.contains(&id) {
-                    profiles[index as usize] = profile;
-
-                    if let Some(event) = emit {
-                        self.emit_event(event).await;
-                    }
-                    return;
                 }
 
                 let headset_profiles = self
@@ -754,10 +756,14 @@ impl Model {
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
                 }
 
-                // No need to check headset/headphone routes if we've detected a headset.
-                if !self.device_headset_check.contains(&id) {
-                    routes[index as usize] = route;
-                    return;
+                if matches!(route.available, Availability::No) {
+                    if let Some(prev_headset_route_index) = self.device_headset_check.get_mut(id) {
+                        if prev_headset_route_index
+                            .map_or(false, |prev_index| prev_index == route.index)
+                        {
+                            *prev_headset_route_index = None;
+                        }
+                    }
                 }
 
                 routes[index as usize] = route;
@@ -771,7 +777,7 @@ impl Model {
                     icon_name: device.icon_name,
                 };
 
-                self.device_headset_check.insert(device.id);
+                self.device_headset_check.insert(device.id, None);
                 self.device_info.insert(device.id, info.clone());
                 self.emit_event(Event::Device(device.id, info)).await;
             }
@@ -921,7 +927,7 @@ impl Model {
 
     async fn remove_device(&mut self, id: DeviceId) {
         tracing::debug!(target: "audio-backend", "Device {id} removed");
-        _ = self.device_headset_check.remove(&id);
+        _ = self.device_headset_check.remove(id);
         _ = self.device_headset_profiles.remove(id);
         _ = self.device_info.remove(id);
         _ = self.device_profiles.remove(id);
