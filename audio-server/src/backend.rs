@@ -472,24 +472,28 @@ impl Model {
                     .await;
                 }
 
-                if let Some(id) = self.device_headset_check.get(&id).cloned()
-                    && let Some(headset_profiles) = self.device_headset_profiles.remove(id)
+                if let Some(id) = dbg!(self.device_headset_check.get(&id).cloned())
+                    && let Some(headset_profiles) = dbg!(self.device_headset_profiles.remove(id))
                     && let Some((headphone_info, headset_info)) =
-                        headset_profiles.headphone.zip(headset_profiles.headset)
-                    && let Some(profiles) = self.device_profiles.get(id)
-                    && let Some(headphone_profile) = profiles
-                        .iter()
-                        .find(|p| p.index as u32 == headphone_info.index)
-                    && let Some(headset_profile) = profiles
-                        .iter()
-                        .find(|p| p.index as u32 == headset_info.index)
-                    && let Some(device_info) = self.device_info.get(id)
-                    && let Some(routes) = self.device_routes.get(id)
-                    && let Some(headset_route) = routes.iter().find(|r| {
+                        dbg!(headset_profiles.headphone).zip(dbg!(headset_profiles.headset))
+                    && let Some(profiles) = dbg!(self.device_profiles.get(id))
+                    && let Some(headphone_profile) = dbg!(
+                        profiles
+                            .iter()
+                            .find(|p| p.index as u32 == headphone_info.index)
+                    )
+                    && let Some(headset_profile) = dbg!(
+                        profiles
+                            .iter()
+                            .find(|p| p.index as u32 == headset_info.index)
+                    )
+                    && let Some(device_info) = dbg!(self.device_info.get(id))
+                    && let Some(routes) = dbg!(self.device_routes.get(id))
+                    && let Some(headset_route) = dbg!(routes.iter().find(|r| {
                         matches!(r.direction, Direction::Input)
                             && matches!(r.available, Availability::Yes | Availability::Unknown)
                             && r.profiles.contains(&(headset_profile.index as i32))
-                    })
+                    }))
                 {
                     let device_name = device_info.name.clone();
                     let headphone_profile_name = headphone_profile.name.clone();
