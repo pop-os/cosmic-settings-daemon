@@ -77,13 +77,12 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
     let custom = context
         .get::<Vec<PreciseApplicationException>>("tiling_exception_custom")
         .unwrap_or_else(|why| {
-            if why.is_err() {
-                if let cosmic_config::Error::GetKey(_, err) = &why {
-                    if err.kind() != std::io::ErrorKind::NotFound {
-                        tracing::error!("tiling exceptions custom config error: {why}");
-                        return Vec::new();
-                    }
-                }
+            if why.is_err()
+                && let cosmic_config::Error::GetKey(_, err) = &why
+                && err.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::error!("tiling exceptions custom config error: {why}");
+                return Vec::new();
             }
             tracing::debug!("tiling exceptions custom config not present: {why}");
             Vec::new()
