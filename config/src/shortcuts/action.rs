@@ -140,6 +140,9 @@ pub enum Action {
     /// Toggle between tiling and floating window states for the active window
     ToggleWindowFloating,
 
+    /// Tile/snap a floating window to a screen zone (edge or corner)
+    TileWindow(TilingZone),
+
     /// Change focus to the given workspace ID
     Workspace(u8),
 
@@ -278,4 +281,17 @@ impl std::ops::Not for Orientation {
             Orientation::Vertical => Orientation::Horizontal,
         }
     }
+}
+
+/// Defines the zone to tile/snap a floating window to
+#[derive(Copy, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+pub enum TilingZone {
+    Top,
+    TopRight,
+    Right,
+    BottomRight,
+    Bottom,
+    BottomLeft,
+    Left,
+    TopLeft,
 }
