@@ -26,7 +26,7 @@ pub fn play_sound(theme: &'static str, sound: &'static str) {
 
 #[memoize::memoize]
 fn sound_path(theme: &'static str, sound: &'static str) -> Option<PathBuf> {
-    let entries = WalkDir::new(&["/usr/share/sounds/", theme].concat())
+    let entries = WalkDir::new(["/usr/share/sounds/", theme].concat())
         .follow_links(true)
         .into_iter()
         .filter_map(Result::ok);
