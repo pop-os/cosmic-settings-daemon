@@ -35,12 +35,21 @@ pub struct PreciseApplicationException {
     pub enabled: bool,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct WorkspaceAssignment {
+    pub appid: String,
+    pub title: String,
+    pub enabled: bool,
+    pub workspace_id: String,
+}
+
 // cosmic-config configuration state for `com.system76.CosmicSettings.WindowRules`
 #[derive(Clone, Debug, Default, PartialEq, CosmicConfigEntry)]
 #[version = 1]
 pub struct Config {
     pub tiling_exception_defaults: Vec<DefaultApplicationException>,
     pub tiling_exception_custom: Vec<PreciseApplicationException>,
+    pub workspace_assignment: Vec<WorkspaceAssignment>,
 }
 
 impl Config {
@@ -77,13 +86,12 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
     let custom = context
         .get::<Vec<PreciseApplicationException>>("tiling_exception_custom")
         .unwrap_or_else(|why| {
-            if why.is_err() {
-                if let cosmic_config::Error::GetKey(_, err) = &why {
-                    if err.kind() != std::io::ErrorKind::NotFound {
-                        tracing::error!("tiling exceptions custom config error: {why}");
-                        return Vec::new();
-                    }
-                }
+            if why.is_err()
+                && let cosmic_config::Error::GetKey(_, err) = &why
+                && err.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::error!("tiling exceptions custom config error: {why}");
+                return Vec::new();
             }
             tracing::debug!("tiling exceptions custom config not present: {why}");
             Vec::new()
@@ -111,6 +119,40 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
                 Some(ApplicationException {
                     appid: exception.appid.clone(),
                     title: exception.title.clone(),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Get the current workspace assignment configuration
+pub fn workspace_assignments(context: &cosmic_config::Config) -> Vec<WorkspaceAssignment> {
+    // Load custom assignments defined by the user.
+    let custom = context
+        .get::<Vec<WorkspaceAssignment>>("workspace_assignment_custom")
+        .unwrap_or_else(|why| {
+            if why.is_err()
+                && let cosmic_config::Error::GetKey(_, err) = &why
+                && err.kind() != std::io::ErrorKind::NotFound
+            {
+                tracing::error!("workspace assignment custom config error: {why}");
+                return Vec::new();
+            }
+            tracing::debug!("workspace assignment custom config not present: {why}");
+            Vec::new()
+        });
+
+    custom
+        .iter()
+        .filter_map(|assignment| {
+            if assignment.enabled {
+                Some(WorkspaceAssignment {
+                    appid: assignment.appid.clone(),
+                    title: assignment.title.clone(),
+                    enabled: true, // Currently unused.
+                    workspace_id: assignment.workspace_id.clone(),
                 })
             } else {
                 None
