@@ -13,7 +13,7 @@ cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
 
 [workspace.dependencies.zlink]
-version = "0.4.0"
+version = "0.4.1"
 default-features = false
 
 [dependencies]
