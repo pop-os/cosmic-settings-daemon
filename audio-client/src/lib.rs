@@ -4,9 +4,11 @@
 #[cfg(feature = "codec")]
 pub mod codec;
 
+pub use zlink;
+use zlink::Connection;
+
 pub use cosmic_settings_audio_core::*;
 use std::{os::fd::OwnedFd, path::PathBuf};
-use zlink::Connection;
 
 pub async fn connect() -> zlink::Result<Client> {
     zlink::unix::connect(socket_path())
