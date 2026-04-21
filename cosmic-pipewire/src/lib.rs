@@ -282,13 +282,7 @@ fn run_service(
                             let state = Rc::downgrade(&state);
                             move || {
                                 if let Some(state) = state.upgrade() {
-                                    let Some((id, ..)) =
-                                        state.borrow_mut().proxies.devices.remove(pw_id)
-                                    else {
-                                        return;
-                                    };
-
-                                    state.borrow_mut().remove_device(id);
+                                    state.borrow_mut().remove_device(pw_id);
                                 }
                             }
                         })
@@ -631,6 +625,7 @@ impl State {
     }
 
     fn add_device(&mut self, id: PipewireId, device: Device) {
+        tracing::debug!(target: "audio-backend", id, "add_device {}", device.id);
         // Map the device's pipewire ID to its device ID
         if let Some(entry) = self.proxies.devices.get_mut(id) {
             entry.0 = device.id;
@@ -737,7 +732,9 @@ impl State {
 
     fn remove_device(&mut self, id: PipewireId) {
         if let Some((device_id, ..)) = self.proxies.devices.remove(id) {
+            tracing::debug!(target: "audio-backend", id, "remove_device {device_id}");
             self.routes.remove(device_id);
+            self.active_routes.remove(device_id);
             self.on_event(Event::RemoveDevice(device_id));
         }
     }
