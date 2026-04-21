@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use cosmic_config::ConfigSet;
-use cosmic_pipewire::{self as pipewire, Direction, PortType, ProfileClass};
+use cosmic_pipewire::{self as pipewire, Direction, NodeProps, PortType, ProfileClass};
 use cosmic_settings_audio_core::Event;
 use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDaemonState};
 use futures_util::{SinkExt, StreamExt};
 use intmap::IntMap;
 use pipewire::Availability;
 use std::{
-    collections::HashSet,
     process::Stdio,
     sync::{Arc, OnceLock},
     time::Instant,
@@ -416,40 +415,7 @@ impl Model {
     async fn pipewire_update(&mut self, event: pipewire::Event) {
         match event {
             pipewire::Event::NodeProperties(id, props) => {
-                let is_active_sink = self.active_sink_node == Some(id);
-                let is_active_source = self.active_source_node == Some(id);
-
-                if let Some(mute) = props.mute {
-                    if is_active_sink {
-                        self.sink_mute = mute;
-                    } else if is_active_source {
-                        self.source_mute = mute;
-                    }
-
-                    if let Some(value) = self.node_mute.get_mut(id) {
-                        *value = mute;
-                        self.emit_event(Event::NodeMute(id, mute)).await;
-                    }
-                }
-
-                if let Some(channel_volumes) = props.channel_volumes {
-                    let (volume, balance) =
-                        pipewire::volume::from_channel_volumes(&channel_volumes);
-                    let volume = (volume * 100.0).round() as u32;
-
-                    if is_active_sink {
-                        self.sink_balance = balance;
-                        self.sink_volume = volume;
-                    } else if is_active_source {
-                        self.source_volume = volume;
-                    }
-
-                    if let Some(value) = self.node_volumes.get_mut(id) {
-                        *value = (volume, balance);
-                        self.emit_event(Event::NodeVolume(id, volume, balance))
-                            .await;
-                    }
-                }
+                self.update_node_properties(id, props).await;
             }
 
             pipewire::Event::ActiveProfile(id, profile) => {
@@ -472,24 +438,20 @@ impl Model {
                     .await;
                 }
 
-                if let Some(prev_headset_port) = dbg!(self.device_headset_check.get(id).cloned())
-                    && let Some(headset_profiles) = dbg!(self.device_headset_profiles.remove(id))
+                if let Some(prev_headset_port) = self.device_headset_check.get(id).cloned()
+                    && let Some(headset_profiles) = self.device_headset_profiles.remove(id)
                     && let Some((headphone_info, headset_info)) =
-                        dbg!(headset_profiles.headphone).zip(dbg!(headset_profiles.headset))
-                    && let Some(profiles) = dbg!(self.device_profiles.get(id))
-                    && let Some(headphone_profile) = dbg!(
-                        profiles
-                            .iter()
-                            .find(|p| p.index as u32 == headphone_info.index)
-                    )
-                    && let Some(headset_profile) = dbg!(
-                        profiles
-                            .iter()
-                            .find(|p| p.index as u32 == headset_info.index)
-                    )
-                    && let Some(device_info) = dbg!(self.device_info.get(id))
-                    && let Some(routes) = dbg!(self.device_routes.get(id))
-                    && let Some(headset_route) = dbg!(routes.iter().find(|r| {
+                        headset_profiles.headphone.zip(headset_profiles.headset)
+                    && let Some(profiles) = self.device_profiles.get(id)
+                    && let Some(headphone_profile) = profiles
+                        .iter()
+                        .find(|p| p.index as u32 == headphone_info.index)
+                    && let Some(headset_profile) = profiles
+                        .iter()
+                        .find(|p| p.index as u32 == headset_info.index)
+                    && let Some(device_info) = self.device_info.get(id)
+                    && let Some(routes) = self.device_routes.get(id)
+                    && let Some(headset_route) = routes.iter().find(|r| {
                         matches!(r.direction, Direction::Input)
                             && matches!(
                                 r.port_type,
@@ -497,7 +459,7 @@ impl Model {
                             )
                             && matches!(r.available, Availability::Yes | Availability::Unknown)
                             && r.profiles.contains(&(headset_profile.index as i32))
-                    }))
+                    })
                 {
                     if prev_headset_port == Some(headset_route.index) {
                         tracing::debug!(
@@ -656,15 +618,14 @@ impl Model {
                             card_profile_devices,
                         } => Some(card_profile_devices),
                     }) {
-                        let routes = dbg!(self.device_routes.get(id));
-                        'outer: for device in dbg!(sink_devices) {
+                        let routes = self.device_routes.get(id);
+                        'outer: for device in sink_devices {
                             for route in routes.into_iter().flatten() {
-                                tracing::debug!(target: "audio-backend", "checking if route is headset or headphone device matching device {device}: {route:#?}");
                                 if matches!(
                                     route.available,
                                     Availability::Yes | Availability::Unknown
-                                ) && dbg!(route.devices.contains(&device))
-                                    && dbg!(route.profiles.contains(&profile.index))
+                                ) && route.devices.contains(&device)
+                                    && route.profiles.contains(&profile.index)
                                 {
                                     if route.icon_name.starts_with("audio-headphones") {
                                         let current = &mut headset_profiles.headphone;
@@ -986,6 +947,43 @@ impl Model {
             .get(node_id)
             .map(|n| n.name.clone())
             .unwrap_or_default();
+    }
+
+    async fn update_node_properties(&mut self, id: DeviceId, props: NodeProps) {
+        tracing::debug!(target: "audio-backend", id, ?props, "update_node_properties");
+        let is_active_sink = self.active_sink_node == Some(id);
+        let is_active_source = self.active_source_node == Some(id);
+
+        if let Some(mute) = props.mute {
+            if is_active_sink {
+                self.sink_mute = mute;
+            } else if is_active_source {
+                self.source_mute = mute;
+            }
+
+            if let Some(value) = self.node_mute.get_mut(id) {
+                *value = mute;
+                self.emit_event(Event::NodeMute(id, mute)).await;
+            }
+        }
+
+        if let Some(channel_volumes) = props.channel_volumes {
+            let (volume, balance) = pipewire::volume::from_channel_volumes(&channel_volumes);
+            let volume = (volume * 100.0).round() as u32;
+
+            if is_active_sink {
+                self.sink_balance = balance;
+                self.sink_volume = volume;
+            } else if is_active_source {
+                self.source_volume = volume;
+            }
+
+            if let Some(value) = self.node_volumes.get_mut(id) {
+                *value = (volume, balance);
+                self.emit_event(Event::NodeVolume(id, volume, balance))
+                    .await;
+            }
+        }
     }
 }
 
