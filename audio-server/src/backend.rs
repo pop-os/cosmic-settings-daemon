@@ -955,6 +955,10 @@ impl Model {
         }
 
         if let Some(channel_volumes) = props.channel_volumes {
+            if channel_volumes.is_empty() {
+                return;
+            }
+
             let (volume, balance) = pipewire::volume::from_channel_volumes(&channel_volumes);
             let volume = (volume * 100.0).round() as u32;
 
