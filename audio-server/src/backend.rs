@@ -73,6 +73,9 @@ pub struct Model {
     device_headset_profiles: IntMap<DeviceId, HeadsetProfiles>,
     /// Check if a newly-added device requires an OSD dialog.
     device_headset_check: IntMap<DeviceId, Option<i32>>,
+    /// Devices with a pending plug event (a headset/headphone route transitioned
+    /// `No` → `Yes`). Gates the confirm-headphones dialog so Bluetooth devices
+    device_headset_plug_pending: IntMap<DeviceId, ()>,
     /// Track which profile is currently assigned to each device.
     active_profiles: IntMap<DeviceId, pipewire::Profile>,
     /// Track which routes are currently active on each device.
@@ -141,6 +144,7 @@ impl Model {
             active_routes: Default::default(),
             device_headset_check: Default::default(),
             device_headset_profiles: Default::default(),
+            device_headset_plug_pending: Default::default(),
             device_routes: Default::default(),
             active_sink_node: Default::default(),
             active_sink_node_name: Default::default(),
@@ -425,7 +429,11 @@ impl Model {
                 ))
                 .await;
 
-                if let Some(prev_headset_port) = self.device_headset_check.get(id).cloned()
+                // Only consider showing the confirm-headphones dialog if a plug event
+                // was observed for this device. This excludes Bluetooth connections,
+                // where routes are reported `Yes` from the start
+                if self.device_headset_plug_pending.get(id).is_some()
+                    && let Some(prev_headset_port) = self.device_headset_check.get(id).cloned()
                     && let Some(headset_profiles) = self.device_headset_profiles.remove(id)
                     && let Some((headphone_info, headset_info)) =
                         headset_profiles.headphone.zip(headset_profiles.headset)
@@ -448,6 +456,8 @@ impl Model {
                             && r.profiles.contains(&(headset_profile.index as i32))
                     })
                 {
+                    _ = self.device_headset_plug_pending.remove(id);
+
                     if prev_headset_port == Some(headset_route.index) {
                         tracing::debug!(
                             target: "audio-backend",
@@ -704,6 +714,31 @@ impl Model {
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
                 }
 
+                // A headset/headphones-capable route that was previously unavailable and is
+                // now available signals a physical plug event (analog jack). Bluetooth
+                // routes come in already `Yes` on connect, so no transition is observed
+                // and no confirmation dialog is needed.
+                let plug_event = routes.get(index as usize).is_some_and(|prev| {
+                    !prev.name.is_empty() && matches!(prev.available, Availability::No)
+                }) && matches!(route.available, Availability::Yes)
+                    && matches!(
+                        route.port_type,
+                        PortType::Headphones
+                            | PortType::Headset
+                            | PortType::Handset
+                            | PortType::Handsfree
+                    );
+
+                if plug_event {
+                    tracing::debug!(
+                        target: "audio-backend",
+                        "Device {id} plug event on route {} ({})",
+                        route.index,
+                        route.name,
+                    );
+                    self.device_headset_plug_pending.insert(id, ());
+                }
+
                 if matches!(route.available, Availability::No) {
                     if let Some(prev_headset_route_index) = self.device_headset_check.get_mut(id) {
                         if prev_headset_route_index
@@ -877,6 +912,7 @@ impl Model {
         tracing::debug!(target: "audio-backend", "Device {id} removed");
         _ = self.device_headset_check.remove(id);
         _ = self.device_headset_profiles.remove(id);
+        _ = self.device_headset_plug_pending.remove(id);
         _ = self.device_info.remove(id);
         _ = self.device_profiles.remove(id);
         _ = self.active_profiles.remove(id);
