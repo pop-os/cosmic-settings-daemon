@@ -419,24 +419,11 @@ impl Model {
             }
 
             pipewire::Event::ActiveProfile(id, profile) => {
-                let prev = std::mem::take(self.active_profiles.entry(id).or_default());
-                if prev.name != profile.name
-                    || prev.index != profile.index
-                    || prev.available != profile.available
-                {
-                    tracing::debug!(
-                        target: "audio-backend",
-                        "Device {id} active profile changed to {}: {}",
-                        profile.index,
-                        profile.description
-                    );
-
-                    self.emit_event(Event::ActiveProfile(
-                        id,
-                        pipewire_profile_to_cosmic(&profile),
-                    ))
-                    .await;
-                }
+                self.emit_event(Event::ActiveProfile(
+                    id,
+                    pipewire_profile_to_cosmic(&profile),
+                ))
+                .await;
 
                 if let Some(prev_headset_port) = self.device_headset_check.get(id).cloned()
                     && let Some(headset_profiles) = self.device_headset_profiles.remove(id)
