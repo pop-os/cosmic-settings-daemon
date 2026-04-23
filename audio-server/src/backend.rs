@@ -523,6 +523,38 @@ impl Model {
 
                 let mut emit = None;
                 let routes = self.active_routes.entry(id).or_default();
+
+                // Detect a plug event via the active-route path: the previously-active
+                // port at this card-profile-device was something non-headset (speaker,
+                // internal mic, etc.), and the newly-active port is headset/headphones
+                // capable.
+                let plug_event = routes.get(index as usize).is_some_and(|prev| {
+                    !prev.name.is_empty()
+                        && !matches!(
+                            prev.port_type,
+                            PortType::Headphones
+                                | PortType::Headset
+                                | PortType::Handset
+                                | PortType::Handsfree
+                        )
+                }) && matches!(
+                    route.port_type,
+                    PortType::Headphones
+                        | PortType::Headset
+                        | PortType::Handset
+                        | PortType::Handsfree
+                );
+
+                if plug_event {
+                    tracing::debug!(
+                        target: "audio-backend",
+                        "Device {id} plug event via active route change to {} ({:?})",
+                        route.name,
+                        route.port_type,
+                    );
+                    self.device_headset_plug_pending.insert(id, ());
+                }
+
                 if let Some(r) = routes.get(index as usize) {
                     if r.index != route.index
                         || r.name != route.name
@@ -714,12 +746,13 @@ impl Model {
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
                 }
 
-                // A headset/headphones-capable route that was previously unavailable and is
+                // A headset/headphones-capable route that was previously unavailable (or unknown) and is
                 // now available signals a physical plug event (analog jack). Bluetooth
                 // routes come in already `Yes` on connect, so no transition is observed
                 // and no confirmation dialog is needed.
                 let plug_event = routes.get(index as usize).is_some_and(|prev| {
-                    !prev.name.is_empty() && matches!(prev.available, Availability::No)
+                    !prev.name.is_empty()
+                        && matches!(prev.available, Availability::No | Availability::Unknown)
                 }) && matches!(route.available, Availability::Yes)
                     && matches!(
                         route.port_type,
