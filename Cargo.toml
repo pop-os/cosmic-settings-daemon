@@ -3,51 +3,54 @@ name = "cosmic-settings-daemon"
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
+publish = false
 
 [workspace]
-members = ["config", "cosmic-settings-daemon-config", "geonames"]
+members = ["audio-client", "audio-core", "audio-server", "config", "cosmic-settings-daemon-config", "geonames", "cosmic-pipewire", "varlink-server"]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
 
-# cosmic-config = { path = "../libcosmic/cosmic-config" }
-# cosmic-theme = { path = "../libcosmic/cosmic-theme" }
-
+[workspace.dependencies.zlink]
+version = "0.4.1"
+default-features = false
 
 [dependencies]
-cosmic-settings-pulse-subscription = { git = "https://github.com/pop-os/cosmic-settings", default-features = false }
 anyhow = "1.0.99"
+cosmic-settings-audio-server = { path = "./audio-server" }
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", features = [
     "greeter",
 ] }
+cosmic-settings-varlink-server = { path = "./varlink-server" }
 dirs = "6.0.0"
-notify = "8.2.0"
-tokio = { version = "1.47.1", features = ["macros", "net", "rt"] }
 udev = "0.9.3"
-zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
-tokio-stream = "0.1.17"
+log = "0.4.28"
+notify = "8.2.0"
 sunrise = "2.1.0"
-cosmic-config.workspace = true
-cosmic-theme.workspace = true
-cosmic-theme.export = true
-cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 chrono = "0.4.42"
-libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false }
-acpid_plug = "0.1.2"
-upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-cosmic-dbus-a11y = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-notify-rust = "4.11.7"
 walkdir = "2.5.0"
 memoize = "0.5.1"
-futures-util = "0.3.31"
+serde = "1.0.228"
 futures = "0.3.31"
-ctrlc = { version = "3.5.0", features = ["termination"] }
 xkb-data = "0.2.1"
+tracing = "0.1.44"
+acpid_plug = "0.1.2"
+notify-rust = "4.11.7"
+tokio-stream = "0.1.17"
+futures-util = "0.3.31"
+cosmic-theme.workspace = true
+cosmic-config.workspace = true
 geonames = { path = "geonames" }
-log = "0.4.28"
-env_logger = "0.11.8"
+ctrlc = { version = "3.5.0", features = ["termination"] }
+tokio = { version = "1.47.1", features = ["macros", "net", "rt"] }
+cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
+locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
+cosmic-dbus-a11y = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false }
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
