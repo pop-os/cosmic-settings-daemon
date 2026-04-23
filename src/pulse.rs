@@ -180,8 +180,8 @@ pub(crate) async fn pulse(
                         }
                     },
                     pulse::Event::CardInfo(info) => {
-                        if info.ports.iter().any(|port| matches!(port.port_type, PortType::Headphones) && matches!(port.availability, Availability::Yes | Availability::Unknown)) &&
-                            info.ports.iter().any(|port| matches!(port.port_type, PortType::Headset) && matches!(port.availability, Availability::Unknown))
+                        if info.ports.iter().any(|port| matches!(port.port_type, PortType::Headphones) && matches!(port.availability, Availability::Yes)) &&
+                            info.ports.iter().any(|port| matches!(port.port_type, PortType::Headset) && matches!(port.availability, Availability::Yes))
                         {
                             let card_name = &info.name;
                             let Some((headphone_port, headphone_profile, headphone_avail)) = info.ports.iter().find(|port| matches!(port.port_type, PortType::Headphones)).and_then(|port| port.profiles.iter().max_by_key(|p| p.priority).map(|prof| (port.name.clone(), prof, port.availability))) else {
