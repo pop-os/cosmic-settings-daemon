@@ -87,6 +87,10 @@ pub enum Action {
     /// Resize the active window in a given direction
     Resizing(ResizeDirection),
 
+    /// Windows-style snap: half/quarter the active window in the given direction.
+    /// Chained presses transition: Left then Down → BottomLeft quarter, etc.
+    Snap(Direction),
+
     /// Move a window to the last workspace
     SendToLastWorkspace,
 

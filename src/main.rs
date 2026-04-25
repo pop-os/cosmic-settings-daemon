@@ -219,6 +219,12 @@ impl SettingsDaemon {
     #[zbus(property)]
     async fn set_keyboard_brightness(&self, _value: i32) {}
 
+    #[zbus(signal)]
+    async fn display_brightness_hotkey(
+        emitter: &SignalEmitter<'_>,
+        new_brightness: i32,
+    ) -> zbus::Result<()>;
+
     async fn increase_display_brightness(
         &self,
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
@@ -229,6 +235,7 @@ impl SettingsDaemon {
             let target = next_target_raw(value, max_raw, 1);
             self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
+            _ = Self::display_brightness_hotkey(&emitter, target).await;
         }
     }
 
@@ -242,6 +249,7 @@ impl SettingsDaemon {
             let target = next_target_raw(value, max_raw, -1);
             self.set_display_brightness(target).await;
             _ = self.display_brightness_changed(&emitter).await;
+            _ = Self::display_brightness_hotkey(&emitter, target).await;
         }
     }
 
