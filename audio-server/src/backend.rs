@@ -687,7 +687,7 @@ impl Model {
 
                                         if current
                                             .as_ref()
-                                            .map_or(true, |c| c.priority > profile.priority as u32)
+                                            .map_or(true, |c| c.priority < profile.priority as u32)
                                         {
                                             *current = Some(HeadsetProfile {
                                                 priority: profile.priority as u32,
