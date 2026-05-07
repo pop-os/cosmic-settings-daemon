@@ -9,9 +9,7 @@ use futures_util::{SinkExt, StreamExt};
 use intmap::IntMap;
 use pipewire::Availability;
 use std::{
-    process::Stdio,
-    sync::{Arc, OnceLock},
-    time::Instant,
+    process::Stdio, sync::{Arc, OnceLock}, time::Instant
 };
 use tokio::net::unix::pipe;
 use tokio_util::codec::FramedWrite;
@@ -333,8 +331,8 @@ impl Model {
                 let routes = self.device_routes.clone();
                 let active_profiles = self.active_profiles.clone();
                 let active_routes = self.active_routes.clone();
-                let default_sink = self.active_sink_node.clone();
-                let default_source = self.active_source_node.clone();
+                let default_sink = self.active_sink_node;
+                let default_source = self.active_source_node;
                 let node_volumes = self.node_volumes.clone();
                 let node_mute = self.node_mute.clone();
 
@@ -862,8 +860,8 @@ impl Model {
                 }
 
                 self.node_info.insert(node.object_id, info.clone());
-                self.node_volumes.insert(node.object_id, (0, None));
-                self.node_mute.insert(node.object_id, true);
+                self.node_volumes.entry(node.object_id).or_insert((0, None));
+                self.node_mute.entry(node.object_id).or_insert(true);
             }
 
             pipewire::Event::MonoAudio(enabled) => {
@@ -1038,11 +1036,10 @@ impl Model {
                 self.source_volume = volume;
             }
 
-            if let Some(value) = self.node_volumes.get_mut(id) {
-                *value = (volume, balance);
-                self.emit_event(Event::NodeVolume(id, volume, balance))
-                    .await;
-            }
+            let value = self.node_volumes.entry(id).or_insert((0, None));
+            *value = (volume, balance);
+            self.emit_event(Event::NodeVolume(id, volume, balance))
+                .await;
         }
     }
 }
