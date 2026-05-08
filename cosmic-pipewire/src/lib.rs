@@ -21,19 +21,12 @@ mod spa_utils;
 pub use spa_utils::Channel;
 
 use libspa::{
-    param::{ParamType, format::FormatProperties},
-    pod::{self, Pod, serialize::PodSerializer},
-    utils::SpaTypes,
+    param::{ParamType, format::FormatProperties}, pod::{self, Pod, serialize::PodSerializer}, utils::SpaTypes
 };
 use pipewire::{
-    device::{DeviceChangeMask, DeviceListener},
-    main_loop::MainLoopWeak,
-    metadata::MetadataListener,
-    node::NodeListener,
-    proxy::{ProxyListener, ProxyT},
-    types::ObjectType,
+    device::{DeviceChangeMask, DeviceListener}, main_loop::MainLoopWeak, metadata::MetadataListener, node::NodeListener, proxy::{ProxyListener, ProxyT}, types::ObjectType
 };
-use std::{cell::RefCell, rc::Rc, u32};
+use std::{cell::RefCell, rc::Rc};
 
 pub type NodeId = u32;
 pub type RouteId = u32;
@@ -309,10 +302,10 @@ fn run_service(
                         .info({
                             let state = Rc::downgrade(&state);
                             move |info| {
-                                if let Some(node) = Node::from_node(info) {
-                                    if let Some(state) = state.upgrade() {
-                                        state.borrow_mut().add_node(id, node);
-                                    }
+                                if let Some(node) = Node::from_node(info)
+                                    && let Some(state) = state.upgrade()
+                                {
+                                    state.borrow_mut().add_node(id, node);
                                 }
                             }
                         })
@@ -392,26 +385,26 @@ fn run_service(
 
                                     match key {
                                         "default.audio.sink" => {
+                                            tracing::info!(target:"audio-backend", value, "default.audio.sink");
                                             if let Ok(value) =
                                                 serde_json::de::from_str::<DefaultAudio>(value)
+                                                && let Some(state) = state.upgrade()
                                             {
-                                                if let Some(state) = state.upgrade() {
-                                                    state
-                                                        .borrow_mut()
-                                                        .default_sink(value.name.to_owned())
-                                                }
+                                                state
+                                                    .borrow_mut()
+                                                    .default_sink(value.name.to_owned())
                                             }
                                         }
 
                                         "default.audio.source" => {
+                                            tracing::info!(target:"audio-backend", value, "default.audio.source");
                                             if let Ok(value) =
                                                 serde_json::de::from_str::<DefaultAudio>(value)
+                                                && let Some(state) = state.upgrade()
                                             {
-                                                if let Some(state) = state.upgrade() {
-                                                    state
-                                                        .borrow_mut()
-                                                        .default_source(value.name.to_owned())
-                                                }
+                                                state
+                                                    .borrow_mut()
+                                                    .default_source(value.name.to_owned())
                                             }
                                         }
 

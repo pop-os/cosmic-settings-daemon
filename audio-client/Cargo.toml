@@ -28,7 +28,7 @@ features = ["proxy", "tokio", "tracing"]
 cosmic-settings-audio-client = { path = ".", features = ["codec"] }
 cosmic-settings-audio-core = { path = "../audio-core" }
 tokio = { version = "1.49.0", features = ["full"] }
-zlink = { version = "0.4.0", features = ["idl", "introspection", "tokio", "tracing", "server", "service"] }
+zlink = { workspace = true, features = ["idl", "introspection", "tokio", "tracing", "server", "service"] }
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 tracing = "0.1.44"
 futures-util = "0.3.32"

@@ -13,8 +13,9 @@ cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
 
 [workspace.dependencies.zlink]
-version = "0.4.1"
+version = "0.5"
 default-features = false
+features = ["tokio"]
 
 [dependencies]
 acpid_plug = "0.1.2"
