@@ -807,7 +807,7 @@ impl Model {
                 // Configure pipewire-pulse to force enable/disable mono as well.
                 tokio::spawn(async move {
                     _ = tokio::process::Command::new("pactl")
-                        .args(&[
+                        .args([
                             "send-message",
                             "/core",
                             "pipewire-pulse:force-mono-output",
