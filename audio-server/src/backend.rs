@@ -206,8 +206,10 @@ impl Model {
     pub fn set_default(&mut self, node_id: NodeId, save: bool) {
         if self.sink_node_ids.contains(&node_id) {
             self.set_default_sink_node_id(node_id, save)
-        } else {
+        } else if self.source_node_ids.contains(&node_id) {
             self.set_default_source_node_id(node_id, save)
+        } else {
+            tracing::warn!(node_id, "set_default node not found");
         }
     }
 
