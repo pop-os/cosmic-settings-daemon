@@ -694,18 +694,18 @@ impl State {
     }
 
     fn default_sink(&mut self, name: String) {
-        if self.default_sink_name == name {
-            return;
+        if self.default_sink_name != name {
+            self.default_sink_name = name.clone();
         }
-        self.default_sink_name = name.clone();
+
         self.on_event(Event::DefaultSink(name));
     }
 
     fn default_source(&mut self, name: String) {
-        if self.default_source_name == name {
-            return;
+        if self.default_source_name != name {
+            self.default_source_name = name.clone();
         }
-        self.default_source_name = name.clone();
+
         self.on_event(Event::DefaultSource(name));
     }
 
@@ -850,7 +850,7 @@ impl State {
             return;
         };
 
-        tracing::debug!(target: "sound", "set_route device_id {device_id}, route_index {route_index}");
+        tracing::debug!(target: "audio-backend", "set_route device_id {device_id}, route_index {route_index}");
 
         let buffer = std::io::Cursor::new(Vec::new());
         let Ok(serialized) = PodSerializer::serialize(
