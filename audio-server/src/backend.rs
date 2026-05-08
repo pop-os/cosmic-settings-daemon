@@ -888,9 +888,11 @@ impl Model {
     async fn remove_node(&mut self, id: NodeId) {
         tracing::debug!(target: "audio-backend", "Node {id} removed");
         if self.active_sink_node == Some(id) {
+            tracing::info!(target: "audio-backend", "Unsetting active sink node");
             self.active_sink_node = None;
             self.active_sink_node_name.clear();
         } else if self.active_source_node == Some(id) {
+            tracing::info!(target: "audio-backend", "Unsetting active sink node");
             self.active_source_node = None;
             self.active_source_node_name.clear();
         }
