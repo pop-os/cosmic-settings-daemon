@@ -820,10 +820,6 @@ impl Model {
 
             pipewire::Event::DefaultSink(node_name) => {
                 tracing::debug!(target: "audio-backend", "default sink node changed to {node_name}");
-                if self.active_sink_node_name == node_name {
-                    return;
-                }
-
                 self.active_sink_node_name = node_name;
                 if let Some(id) = self.node_id_from_name(&self.active_sink_node_name, true) {
                     self.set_default_sink_id(id);
@@ -842,10 +838,6 @@ impl Model {
 
             pipewire::Event::DefaultSource(node_name) => {
                 tracing::debug!(target: "audio-backend", "default source node changed to {node_name}");
-                if self.active_source_node_name == node_name {
-                    return;
-                }
-
                 self.active_source_node_name = node_name;
                 if let Some(id) = self.node_id_from_name(&self.active_source_node_name, false) {
                     self.set_default_source_id(id);
