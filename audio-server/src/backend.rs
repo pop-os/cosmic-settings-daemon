@@ -882,11 +882,9 @@ impl Model {
         if self.active_sink_node == Some(id) {
             tracing::info!(target: "audio-backend", "Unsetting active sink node");
             self.active_sink_node = None;
-            self.active_sink_node_name.clear();
         } else if self.active_source_node == Some(id) {
             tracing::info!(target: "audio-backend", "Unsetting active sink node");
             self.active_source_node = None;
-            self.active_source_node_name.clear();
         }
 
         if let Some(pos) = self.sink_node_ids.iter().position(|&node_id| node_id == id) {
