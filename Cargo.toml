@@ -48,6 +48,7 @@ xkb-data = "0.2.1"
 geonames = { path = "geonames" }
 log = "0.4.28"
 env_logger = "0.11.8"
+ddc-hi = "0.4.1"
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
