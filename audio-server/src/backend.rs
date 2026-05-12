@@ -576,11 +576,6 @@ impl Model {
                     profile.description,
                     profile.classes,
                 );
-                if let Some(p) = self.active_profiles.get_mut(id)
-                    && p.index == profile.index
-                {
-                    *p = profile.clone();
-                }
 
                 let mut emit = None;
                 let profiles = self.device_profiles.entry(id).or_default();
@@ -622,13 +617,13 @@ impl Model {
                     let classes = profile.classes.iter().map(|c| match c {
                         ProfileClass::AudioSink {
                             card_profile_devices,
-                        } => card_profile_devices,
+                        } => (true, card_profile_devices),
                         ProfileClass::AudioSource {
                             card_profile_devices,
-                        } => card_profile_devices,
+                        } => (false, card_profile_devices),
                     });
                     let routes = self.device_routes.get(id);
-                    for devices in classes {
+                    for (is_sink, devices) in classes {
                         'outer: for device in devices {
                             for route in routes.into_iter().flatten() {
                                 if matches!(
@@ -653,7 +648,9 @@ impl Model {
                                             *current = Some(profile);
                                         }
                                         break 'outer;
-                                    } else if route.icon_name.starts_with("audio-headset") {
+                                    } else if !is_sink
+                                        && route.icon_name.starts_with("audio-headset")
+                                    {
                                         let current = &mut headset_profiles.headset;
                                         if current
                                             .as_ref()
@@ -687,10 +684,14 @@ impl Model {
                                             *current = Some(profile);
                                         }
                                         break 'outer;
-                                    } else if matches!(
-                                        route.port_type,
-                                        PortType::Headset | PortType::Handset | PortType::Handsfree
-                                    ) {
+                                    } else if !is_sink
+                                        && matches!(
+                                            route.port_type,
+                                            PortType::Headset
+                                                | PortType::Handset
+                                                | PortType::Handsfree
+                                        )
+                                    {
                                         let current = &mut headset_profiles.headset;
                                         if current
                                             .as_ref()
