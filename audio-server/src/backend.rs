@@ -34,6 +34,7 @@ pub struct HeadsetProfile {
     priority: u32,
     card_profile_device: u32,
     index: u32,
+    route: u32,
 }
 
 pub struct Model {
@@ -449,13 +450,9 @@ impl Model {
                     && let Some((headphone_info, headset_info)) =
                         headset_profiles.headphone.zip(headset_profiles.headset)
                     && let Some(profiles) = self.device_profiles.get(id)
-                    && let Some(headphone_profile) = profiles
-                        .iter()
-                        .find(|p| p.index as u32 == headphone_info.index)
                     && let Some(headset_profile) = profiles
                         .iter()
                         .find(|p| p.index as u32 == headset_info.index)
-                    && let Some(device_info) = self.device_info.get(id)
                     && let Some(routes) = self.device_routes.get(id)
                     && let Some(headset_route) = routes.iter().find(|r| {
                         matches!(r.direction, Direction::Input)
@@ -477,11 +474,6 @@ impl Model {
                         return;
                     }
 
-                    let device_name = device_info.name.clone();
-                    let headphone_profile_name = headphone_profile.name.clone();
-                    let headset_profile_name = headset_profile.name.clone();
-                    let headset_port_name = headset_route.name.clone();
-
                     self.device_headset_check
                         .insert(id, Some(headset_route.index));
 
@@ -493,20 +485,30 @@ impl Model {
                     {
                         tracing::debug!(
                             target: "audio-backend",
-                            "cosmic-osd confirm-headphones {device_name}, {headphone_profile_name}, {headset_profile_name}, {headset_port_name}"
+                            ?headphone_info,
+                            ?headset_info,
+                            "cosmic-osd confirm-headphones {id}"
                         );
 
                         tokio::spawn(async move {
                             _ = tokio::process::Command::new("cosmic-osd")
                                 .arg("confirm-headphones")
-                                .arg("--card-name")
-                                .arg(&device_name)
+                                .arg("--device")
+                                .arg(numtoa::BaseN::<10>::u32(id).as_str())
+                                .arg("--headphone-card-profile-device")
+                                .arg(
+                                    numtoa::BaseN::<10>::u32(headphone_info.card_profile_device)
+                                        .as_str(),
+                                )
                                 .arg("--headphone-profile")
-                                .arg(&headphone_profile_name)
+                                .arg(numtoa::BaseN::<10>::u32(headphone_info.index).as_str())
+                                .arg("--headphone-route")
+                                .arg(numtoa::BaseN::<10>::u32(headphone_info.route).as_str())
+                                .arg("--headset-card-profile-device")
                                 .arg("--headset-profile")
-                                .arg(&headset_profile_name)
-                                .arg("--headset-port-name")
-                                .arg(&headset_port_name)
+                                .arg(numtoa::BaseN::<10>::u32(headset_info.index).as_str())
+                                .arg("--headset-route")
+                                .arg(numtoa::BaseN::<10>::u32(headset_info.route).as_str())
                                 .status()
                                 .await;
                         });
@@ -603,10 +605,7 @@ impl Model {
                     ));
                 }
 
-                let headset_profiles = self
-                    .device_headset_profiles
-                    .entry(id)
-                    .or_insert_with(Default::default);
+                let headset_profiles = self.device_headset_profiles.entry(id).or_default();
 
                 // An index of 0 implies that we're reloading device's profiles.
                 if index == 0 {
@@ -616,34 +615,38 @@ impl Model {
 
                 // Track bluetooth and headset profiles
                 if matches!(profile.available, Availability::Yes | Availability::Unknown) {
-                    if let Some(sink_devices) = profile.classes.iter().find_map(|c| match c {
+                    let classes = profile.classes.iter().map(|c| match c {
                         ProfileClass::AudioSink {
                             card_profile_devices,
-                        } => Some(card_profile_devices),
+                        } => card_profile_devices,
                         ProfileClass::AudioSource {
                             card_profile_devices,
-                        } => Some(card_profile_devices),
-                    }) {
-                        let routes = self.device_routes.get(id);
-                        'outer: for device in sink_devices {
+                        } => card_profile_devices,
+                    });
+                    let routes = self.device_routes.get(id);
+                    for devices in classes {
+                        'outer: for device in devices {
                             for route in routes.into_iter().flatten() {
                                 if matches!(
                                     route.available,
                                     Availability::Yes | Availability::Unknown
-                                ) && route.devices.contains(&device)
+                                ) && route.devices.contains(device)
                                     && route.profiles.contains(&profile.index)
                                 {
                                     if route.icon_name.starts_with("audio-headphones") {
                                         let current = &mut headset_profiles.headphone;
-
                                         if current
                                             .as_ref()
                                             .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
-                                            *current = Some(HeadsetProfile {
+                                            let profile = HeadsetProfile {
                                                 priority: profile.priority as u32,
+                                                card_profile_device: *device as u32,
                                                 index: profile.index as u32,
-                                            });
+                                                route: route.index as u32,
+                                            };
+                                            tracing::debug!(target: "audio-backend", ?profile, "selecting headphone profile candidate");
+                                            *current = Some(profile);
                                         }
                                         break 'outer;
                                     } else if route.icon_name.starts_with("audio-headset") {
@@ -652,10 +655,14 @@ impl Model {
                                             .as_ref()
                                             .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
-                                            *current = Some(HeadsetProfile {
+                                            let profile = HeadsetProfile {
                                                 priority: profile.priority as u32,
+                                                card_profile_device: *device as u32,
                                                 index: profile.index as u32,
-                                            });
+                                                route: route.index as u32,
+                                            };
+                                            tracing::debug!(target: "audio-backend", ?profile, "selecting headset profile candidate");
+                                            *current = Some(profile);
                                         }
 
                                         break 'outer;
@@ -666,10 +673,14 @@ impl Model {
                                             .as_ref()
                                             .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
-                                            *current = Some(HeadsetProfile {
+                                            let profile = HeadsetProfile {
                                                 priority: profile.priority as u32,
+                                                card_profile_device: *device as u32,
                                                 index: profile.index as u32,
-                                            });
+                                                route: route.index as u32,
+                                            };
+                                            tracing::debug!(target: "audio-backend", ?profile, "selecting headphone profile candidate");
+                                            *current = Some(profile);
                                         }
                                         break 'outer;
                                     } else if matches!(
@@ -681,10 +692,14 @@ impl Model {
                                             .as_ref()
                                             .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
-                                            *current = Some(HeadsetProfile {
+                                            let profile = HeadsetProfile {
                                                 priority: profile.priority as u32,
+                                                card_profile_device: *device as u32,
                                                 index: profile.index as u32,
-                                            });
+                                                route: route.index as u32,
+                                            };
+                                            tracing::debug!(target: "audio-backend", ?profile, "selecting headset profile candidate");
+                                            *current = Some(profile);
                                         }
 
                                         break 'outer;
