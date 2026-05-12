@@ -30,10 +30,11 @@ impl Server {
             why: format!("{}", why),
         })?;
 
-        if let Err(_) = self
+        if self
             .backend
             .sender
             .send(crate::backend::Message::Subscribe(Arc::new(writer)))
+            .is_err()
         {
             return Err(Error::ChannelSend);
         }
@@ -101,7 +102,7 @@ impl Server {
         Ok(())
     }
 
-    pub async fn source_mute_toggle<'a>(&'a mut self) -> Result<Mute, Error> {
+    pub async fn source_mute_toggle(&mut self) -> Result<Mute, Error> {
         let mut model = self.backend.model.lock().await;
         let Some(node_id) = model.active_source_node else {
             return Err(Error::NoActiveSource);
@@ -111,7 +112,7 @@ impl Server {
         set_node_mute(&mut model, node_id, mute)
     }
 
-    pub async fn source_volume_lower<'a>(&'a mut self, step: u32) -> Result<Volume, Error> {
+    pub async fn source_volume_lower(&mut self, step: u32) -> Result<Volume, Error> {
         let mut model = self.backend.model.lock().await;
         let Some(id) = model.active_source_node else {
             return Err(Error::NoActiveSource);
@@ -129,7 +130,7 @@ impl Server {
         set_node_volume(&mut model, id, volume, None)
     }
 
-    pub async fn source_volume_raise<'a>(&'a mut self, step: u32) -> Result<Volume, Error> {
+    pub async fn source_volume_raise(&mut self, step: u32) -> Result<Volume, Error> {
         let mut model = self.backend.model.lock().await;
         let Some(id) = model.active_source_node else {
             return Err(Error::NoActiveSource);
@@ -208,9 +209,8 @@ impl Server {
         });
 
         let mut model = self.backend.model.lock().await;
-        let node_id = model.active_sink_node.clone().ok_or(Error::NoActiveSink)?;
+        let node_id = model.active_sink_node.ok_or(Error::NoActiveSink)?;
         let entry = model.node_volumes.entry(node_id).or_insert((100, None));
-
         entry.0 = volume;
         let (volume, balance) = *entry;
         set_node_volume(&mut model, node_id, volume, balance)
@@ -218,44 +218,33 @@ impl Server {
 
     pub async fn set_source_volume(&mut self, volume: u32) -> Result<Volume, Error> {
         let mut model = self.backend.model.lock().await;
-        let node_id = model
-            .active_source_node
-            .clone()
-            .ok_or(Error::NoActiveSink)?;
-
+        let node_id = model.active_source_node.ok_or(Error::NoActiveSink)?;
         let entry = model.node_volumes.entry(node_id).or_insert((100, None));
-
         entry.0 = volume;
         let (volume, balance) = *entry;
         set_node_volume(&mut model, node_id, volume, balance)
     }
 
-    pub async fn set_node_mute<'a>(&'a mut self, node_id: u32, mute: bool) -> Result<Mute, Error> {
+    pub async fn set_node_mute(&mut self, node_id: u32, mute: bool) -> Result<Mute, Error> {
         let mut model = self.backend.model.lock().await;
         set_node_mute(&mut model, node_id, mute)
     }
 
-    pub async fn set_node_volume<'a>(
-        &'a mut self,
-        node_id: u32,
-        volume: u32,
-    ) -> Result<Volume, Error> {
+    pub async fn set_node_volume(&mut self, node_id: u32, volume: u32) -> Result<Volume, Error> {
         let mut model = self.backend.model.lock().await;
         let entry = model.node_volumes.entry(node_id).or_insert((100, None));
-
         entry.0 = volume;
         let (volume, balance) = *entry;
         set_node_volume(&mut model, node_id, volume, balance)
     }
 
-    pub async fn set_node_volume_balance<'a>(
-        &'a mut self,
+    pub async fn set_node_volume_balance(
+        &mut self,
         node_id: u32,
         balance: Option<f32>,
     ) -> Result<Volume, Error> {
         let mut model = self.backend.model.lock().await;
         let entry = model.node_volumes.entry(node_id).or_insert((100, None));
-
         entry.1 = balance;
         let (volume, balance) = *entry;
         set_node_volume(&mut model, node_id, volume, balance)
@@ -281,7 +270,7 @@ fn set_node_mute(
     Ok(Mute { id: node_id, mute })
 }
 
-fn set_node_volume<'a>(
+fn set_node_volume(
     model: &mut crate::backend::Model,
     node_id: u32,
     volume: u32,
@@ -321,7 +310,7 @@ fn round_up(num: u32, step: u32) -> u32 {
 /// Round a volume to the nearest decrement below the requested step.
 /// ie: 54 - 5 will be 50 while 50 - 5 is 45.
 fn round_down(num: u32, step: u32) -> u32 {
-    ((num / step) * step) - if num % step > 0 { 0 } else { step }
+    ((num / step) * step) - if num.is_multiple_of(step) { step } else { 0 }
 }
 
 #[cfg(test)]

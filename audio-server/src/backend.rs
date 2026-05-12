@@ -29,9 +29,10 @@ struct HeadsetProfiles {
     headset: Option<HeadsetProfile>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct HeadsetProfile {
     priority: u32,
+    card_profile_device: u32,
     index: u32,
 }
 
@@ -260,7 +261,7 @@ impl Model {
                 if let Some(card_profile_device) = self
                     .node_info
                     .get(node_id)
-                    .and_then(|n| n.card_profile_device.clone())
+                    .and_then(|n| n.card_profile_device)
                     && let Some(routes) = self.device_routes.get(device_id)
                     && let Some(route) = routes
                         .iter()
@@ -299,7 +300,7 @@ impl Model {
             if let Some(card_profile_device) = self
                 .node_info
                 .get(node_id)
-                .and_then(|n| n.card_profile_device.clone())
+                .and_then(|n| n.card_profile_device)
                 && let Some(routes) = self.device_routes.get(device_id)
                 && let Some(route) = routes
                     .iter()
@@ -463,7 +464,7 @@ impl Model {
                                 PortType::Headset | PortType::Handset | PortType::Handsfree
                             )
                             && matches!(r.available, Availability::Yes | Availability::Unknown)
-                            && r.profiles.contains(&(headset_profile.index as i32))
+                            && r.profiles.contains(&headset_profile.index)
                     })
                 {
                     if prev_headset_port == Some(headset_route.index) {
@@ -569,10 +570,10 @@ impl Model {
                     profile.description,
                     profile.classes,
                 );
-                if let Some(p) = self.active_profiles.get_mut(id) {
-                    if p.index == profile.index {
-                        *p = profile.clone();
-                    }
+                if let Some(p) = self.active_profiles.get_mut(id)
+                    && p.index == profile.index
+                {
+                    *p = profile.clone();
                 }
 
                 let mut emit = None;
@@ -637,7 +638,7 @@ impl Model {
 
                                         if current
                                             .as_ref()
-                                            .map_or(true, |c| c.priority < profile.priority as u32)
+                                            .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
                                             *current = Some(HeadsetProfile {
                                                 priority: profile.priority as u32,
@@ -649,7 +650,7 @@ impl Model {
                                         let current = &mut headset_profiles.headset;
                                         if current
                                             .as_ref()
-                                            .map_or(true, |c| c.priority < profile.priority as u32)
+                                            .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
                                             *current = Some(HeadsetProfile {
                                                 priority: profile.priority as u32,
@@ -663,7 +664,7 @@ impl Model {
 
                                         if current
                                             .as_ref()
-                                            .map_or(true, |c| c.priority < profile.priority as u32)
+                                            .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
                                             *current = Some(HeadsetProfile {
                                                 priority: profile.priority as u32,
@@ -678,7 +679,7 @@ impl Model {
                                         let current = &mut headset_profiles.headset;
                                         if current
                                             .as_ref()
-                                            .map_or(true, |c| c.priority < profile.priority as u32)
+                                            .is_none_or(|c| c.priority < profile.priority as u32)
                                         {
                                             *current = Some(HeadsetProfile {
                                                 priority: profile.priority as u32,
@@ -722,14 +723,11 @@ impl Model {
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
                 }
 
-                if matches!(route.available, Availability::No) {
-                    if let Some(prev_headset_route_index) = self.device_headset_check.get_mut(id) {
-                        if prev_headset_route_index
-                            .map_or(false, |prev_index| prev_index == route.index)
-                        {
-                            *prev_headset_route_index = None;
-                        }
-                    }
+                if matches!(route.available, Availability::No)
+                    && let Some(prev_headset_route_index) = self.device_headset_check.get_mut(id)
+                    && prev_headset_route_index.is_some_and(|prev_index| prev_index == route.index)
+                {
+                    *prev_headset_route_index = None;
                 }
 
                 routes[index as usize] = route;
