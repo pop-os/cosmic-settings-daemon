@@ -505,6 +505,10 @@ impl Model {
                                 .arg("--headphone-route")
                                 .arg(numtoa::BaseN::<10>::u32(headphone_info.route).as_str())
                                 .arg("--headset-card-profile-device")
+                                .arg(
+                                    numtoa::BaseN::<10>::u32(headset_info.card_profile_device)
+                                        .as_str(),
+                                )
                                 .arg("--headset-profile")
                                 .arg(numtoa::BaseN::<10>::u32(headset_info.index).as_str())
                                 .arg("--headset-route")
