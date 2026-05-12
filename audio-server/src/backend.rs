@@ -257,19 +257,7 @@ impl Model {
     ///
     /// Requires using the device ID rather than a node ID.
     pub async fn set_profile(&mut self, device_id: DeviceId, index: u32, save: bool) {
-        if let Some(profiles) = self.device_profiles.get(device_id) {
-            for profile in profiles {
-                if profile.index as u32 == index {
-                    self.active_profiles.insert(device_id, profile.clone());
-                    self.pipewire_send(pipewire::Request::SetProfile(device_id, index, save));
-                }
-            }
-
-            // Use pw-cli as a fallback in case it wasn't set correctly.
-            tokio::spawn(async move {
-                set_profile(device_id, index, save).await;
-            });
-        }
+        self.pipewire_send(pipewire::Request::SetProfile(device_id, index, save));
     }
 
     /// Changes the active route of a device.
@@ -1066,30 +1054,6 @@ pub async fn pactl_set_default_sink(node_name: &str) {
 pub async fn pactl_set_default_source(node_name: &str) {
     _ = tokio::process::Command::new("pactl")
         .args(["set-default-source", node_name])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
-}
-
-// TODO: Use pipewire library
-pub async fn set_profile(id: u32, index: u32, save: bool) {
-    tracing::info!(target: "audio-backend", id, index, save, "set_profile");
-    let id = numtoa::BaseN::<10>::u32(id);
-    let index = numtoa::BaseN::<10>::u32(index);
-    let value = [
-        "{ index: ",
-        index.as_str(),
-        if save {
-            ", save: true }"
-        } else {
-            ", save: false }"
-        },
-    ]
-    .concat();
-
-    _ = tokio::process::Command::new("pw-cli")
-        .args(["s", id.as_str(), "Profile", &value])
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .status()
