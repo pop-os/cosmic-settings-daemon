@@ -74,6 +74,20 @@ impl Server {
         Ok(())
     }
 
+    pub async fn set_route(
+        &mut self,
+        device_id: u32,
+        card_profile_device: u32,
+        route_index: u32,
+        save: bool,
+    ) -> Result<(), Error> {
+        let mut model = self.backend.model.lock().await;
+        model
+            .set_route(device_id, card_profile_device, route_index, save)
+            .await;
+        Ok(())
+    }
+
     pub async fn set_mono(&mut self, enabled: bool) -> Result<(), Error> {
         self.backend.model.lock().await.pipewire_send(
             cosmic_pipewire::Request::SetMetadataProperty {

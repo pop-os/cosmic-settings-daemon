@@ -82,6 +82,15 @@ pub trait CosmicAudioProxy {
         save: bool,
     ) -> zlink::Result<Result<(), Error>>;
 
+    /// Change the active route of an audio device.
+    async fn set_route(
+        &mut self,
+        device_id: u32,
+        card_profile_device: u32,
+        route_index: u32,
+        save: bool,
+    ) -> zlink::Result<Result<(), Error>>;
+
     /// Apply a volume to the default sink node.
     async fn set_sink_volume(&mut self, volume: u32) -> zlink::Result<Result<Volume, Error>>;
 

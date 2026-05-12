@@ -205,6 +205,22 @@ where
             .await
     }
 
+    #[zlink(interface = "com.system76.CosmicSettings.Audio", rename = "SetRoute")]
+    pub async fn audio_set_route(
+        &mut self,
+        device_id: u32,
+        card_profile_device: u32,
+        route_index: u32,
+        save: bool,
+    ) -> Result<(), audio::Error> {
+        self.0
+            .lock()
+            .await
+            .audio_server
+            .set_route(device_id, card_profile_device, route_index, save)
+            .await
+    }
+
     #[zlink(
         interface = "com.system76.CosmicSettings.Audio",
         rename = "SetSinkVolume"
