@@ -56,7 +56,7 @@ const AMPLIFICATION_SINK: &str = "amplification_sink";
 struct SettingsDaemon {
     logind_session: Option<LogindSessionProxy<'static>>,
     a11y_session: Option<Mutex<cosmic_dbus_a11y::StatusProxy<'static>>>,
-    display_brightness_device: Option<BrightnessDevice>,
+    display_brightness_device: BrightnessDevice,
     watched_configs: Arc<
         RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
     >,
@@ -144,20 +144,26 @@ fn raw_from_step_index(step_index: i32, max_raw: i32) -> i32 {
 // Min=0 or 1 is enforced in brightness_device.rs; we just choose the target here.
 #[inline]
 fn next_target_raw(raw: i32, max_raw: i32, dir: i8) -> i32 {
-    if max_raw <= 0 { return raw; }
+    if max_raw <= 0 {
+        return raw;
+    }
 
     if dir > 0 {
         // Increase: smallest setpoint strictly > raw
         for k in 0..=20 {
             let sp = raw_from_step_index(k, max_raw);
-            if sp > raw { return sp; }
+            if sp > raw {
+                return sp;
+            }
         }
         max_raw
     } else {
         // Decrease: largest setpoint strictly < raw
         for k in (0..=20).rev() {
             let sp = raw_from_step_index(k, max_raw);
-            if sp < raw { return sp; }
+            if sp < raw {
+                return sp;
+            }
         }
         0
     }
@@ -167,17 +173,13 @@ fn next_target_raw(raw: i32, max_raw: i32, dir: i8) -> i32 {
 impl SettingsDaemon {
     #[zbus(property)]
     async fn display_brightness(&self) -> i32 {
-        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-            // XXX error
-            brightness_device
-                .brightness()
-                .await
-                .ok()
-                .map(|x| x as i32)
-                .unwrap_or(-1)
-        } else {
-            -1
-        }
+        // XXX error
+        self.display_brightness_device
+            .brightness()
+            .await
+            .ok()
+            .map(|x| x as i32)
+            .unwrap_or(-1)
     }
 
     /// Take the current xkb config and switch the active input source.
@@ -189,25 +191,21 @@ impl SettingsDaemon {
 
     #[zbus(property)]
     async fn max_display_brightness(&self) -> i32 {
-        if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-            brightness_device.max_brightness() as i32
-        } else {
-            -1
-        }
+        self.display_brightness_device.max_brightness() as i32
     }
 
     #[zbus(property)]
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
-            if let Some(brightness_device) = self.display_brightness_device.as_ref() {
-                // Align with slider behavior and device clamp: floor at 1 for backlight
-                let max = brightness_device.max_brightness() as i32;
-                let min = brightness_device.min_brightness() as i32;
-                let clamped = value.clamp(min, max);
-                _ = brightness_device
-                    .set_brightness(logind_session, clamped as u32)
-                    .await;
-            }
+            // Align with slider behavior and device clamp: floor at 1 for backlight
+            let max = self.display_brightness_device.max_brightness() as i32;
+            let min = self.display_brightness_device.min_brightness() as i32;
+
+            let clamped = value.clamp(min, max);
+            _ = self
+                .display_brightness_device
+                .set_brightness(logind_session, clamped as u32)
+                .await;
         }
     }
 
@@ -224,12 +222,10 @@ impl SettingsDaemon {
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
-        if self.display_brightness_device.is_some() {
-            let max_raw = self.max_display_brightness().await;
-            let target = next_target_raw(value, max_raw, 1);
-            self.set_display_brightness(target).await;
-            _ = self.display_brightness_changed(&emitter).await;
-        }
+        let max_raw = self.max_display_brightness().await;
+        let target = next_target_raw(value, max_raw, 1);
+        self.set_display_brightness(target).await;
+        _ = self.display_brightness_changed(&emitter).await;
     }
 
     async fn decrease_display_brightness(
@@ -237,12 +233,10 @@ impl SettingsDaemon {
         #[zbus(signal_emitter)] emitter: SignalEmitter<'_>,
     ) {
         let value = self.display_brightness().await;
-        if self.display_brightness_device.is_some() {
-            let max_raw = self.max_display_brightness().await;
-            let target = next_target_raw(value, max_raw, -1);
-            self.set_display_brightness(target).await;
-            _ = self.display_brightness_changed(&emitter).await;
-        }
+        let max_raw = self.max_display_brightness().await;
+        let target = next_target_raw(value, max_raw, -1);
+        self.set_display_brightness(target).await;
+        _ = self.display_brightness_changed(&emitter).await;
     }
 
     async fn increase_keyboard_brightness(&self) {}
@@ -400,9 +394,7 @@ fn backlight_monitor() -> io::Result<AsyncFd<udev::MonitorSocket>> {
 }
 
 // Choose backlight with most "precision". This is what `light` does.
-async fn choose_best_backlight(
-    udev_devices: &HashMap<PathBuf, udev::Device>,
-) -> Option<BrightnessDevice> {
+async fn choose_best_backlight(udev_devices: &HashMap<PathBuf, udev::Device>) -> BrightnessDevice {
     let mut best_backlight = None;
     let mut best_max_brightness = 0;
     for device in udev_devices.values() {
@@ -418,7 +410,8 @@ async fn choose_best_backlight(
             }
         }
     }
-    best_backlight
+
+    best_backlight.unwrap_or_else(|| BrightnessDevice::external())
 }
 
 async fn backlight_monitor_task(
