@@ -215,6 +215,44 @@ impl Model {
         }
     }
 
+    /// Selects the headphone profile of a device.
+    pub async fn select_headphone_profile(&mut self, device_id: u32) {
+        if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
+            && let Some(profile) = headset_profiles.headphone
+        {
+            self.pipewire_send(pipewire::Request::SetProfile(
+                device_id,
+                profile.index,
+                true,
+            ));
+            self.pipewire_send(pipewire::Request::SetRoute(
+                device_id,
+                profile.card_profile_device,
+                profile.route,
+                true,
+            ));
+        }
+    }
+
+    /// Selects the headset profile of a device.
+    pub async fn select_headset_profile(&mut self, device_id: u32) {
+        if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
+            && let Some(profile) = headset_profiles.headset
+        {
+            self.pipewire_send(pipewire::Request::SetProfile(
+                device_id,
+                profile.index,
+                true,
+            ));
+            self.pipewire_send(pipewire::Request::SetRoute(
+                device_id,
+                profile.card_profile_device,
+                profile.route,
+                true,
+            ));
+        }
+    }
+
     /// Sets and applies a profile to a device with wpctl.
     ///
     /// Requires using the device ID rather than a node ID.
@@ -244,6 +282,7 @@ impl Model {
         route_index: u32,
         save: bool,
     ) {
+        tracing::info!(target: "audio-backend", device_id, card_profile_device, route_index, save, "set_route");
         self.pipewire_send(pipewire::Request::SetRoute(
             device_id,
             card_profile_device,
@@ -446,7 +485,7 @@ impl Model {
                 .await;
 
                 if let Some(prev_headset_port) = self.device_headset_check.get(id).cloned()
-                    && let Some(headset_profiles) = self.device_headset_profiles.remove(id)
+                    && let Some(headset_profiles) = self.device_headset_profiles.get(id)
                     && let Some((headphone_info, headset_info)) =
                         headset_profiles.headphone.zip(headset_profiles.headset)
                     && let Some(profiles) = self.device_profiles.get(id)
@@ -495,24 +534,6 @@ impl Model {
                                 .arg("confirm-headphones")
                                 .arg("--device")
                                 .arg(numtoa::BaseN::<10>::u32(id).as_str())
-                                .arg("--headphone-card-profile-device")
-                                .arg(
-                                    numtoa::BaseN::<10>::u32(headphone_info.card_profile_device)
-                                        .as_str(),
-                                )
-                                .arg("--headphone-profile")
-                                .arg(numtoa::BaseN::<10>::u32(headphone_info.index).as_str())
-                                .arg("--headphone-route")
-                                .arg(numtoa::BaseN::<10>::u32(headphone_info.route).as_str())
-                                .arg("--headset-card-profile-device")
-                                .arg(
-                                    numtoa::BaseN::<10>::u32(headset_info.card_profile_device)
-                                        .as_str(),
-                                )
-                                .arg("--headset-profile")
-                                .arg(numtoa::BaseN::<10>::u32(headset_info.index).as_str())
-                                .arg("--headset-route")
-                                .arg(numtoa::BaseN::<10>::u32(headset_info.route).as_str())
                                 .status()
                                 .await;
                         });
@@ -667,12 +688,14 @@ impl Model {
                                         }
 
                                         break 'outer;
-                                    } else if matches!(route.port_type, PortType::Headphones) {
+                                    } else if is_sink
+                                        && matches!(route.port_type, PortType::Headphones)
+                                    {
                                         let current = &mut headset_profiles.headphone;
 
                                         if current
                                             .as_ref()
-                                            .is_none_or(|c| c.priority < profile.priority as u32)
+                                            .is_none_or(|c| c.priority <= profile.priority as u32)
                                         {
                                             let profile = HeadsetProfile {
                                                 priority: profile.priority as u32,
@@ -965,7 +988,6 @@ impl Model {
     }
 
     async fn update_node_properties(&mut self, id: DeviceId, props: NodeProps) {
-        tracing::debug!(target: "audio-backend", id, ?props, "update_node_properties");
         let is_active_sink = self.active_sink_node == Some(id);
         let is_active_source = self.active_source_node == Some(id);
 
@@ -1052,6 +1074,7 @@ pub async fn pactl_set_default_source(node_name: &str) {
 
 // TODO: Use pipewire library
 pub async fn set_profile(id: u32, index: u32, save: bool) {
+    tracing::info!(target: "audio-backend", id, index, save, "set_profile");
     let id = numtoa::BaseN::<10>::u32(id);
     let index = numtoa::BaseN::<10>::u32(index);
     let value = [

@@ -98,6 +98,38 @@ where
 
     #[zlink(
         interface = "com.system76.CosmicSettings.Audio",
+        rename = "SelectHeadphoneProfile"
+    )]
+    pub async fn audio_select_headphone_profile(
+        &mut self,
+        device_id: u32,
+    ) -> Result<(), audio::Error> {
+        self.0
+            .lock()
+            .await
+            .audio_server
+            .select_headphone_profile(device_id)
+            .await
+    }
+
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SelectHeadsetProfile"
+    )]
+    pub async fn audio_select_headset_profile(
+        &mut self,
+        device_id: u32,
+    ) -> Result<(), audio::Error> {
+        self.0
+            .lock()
+            .await
+            .audio_server
+            .select_headset_profile(device_id)
+            .await
+    }
+
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
         rename = "SinkMuteToggle"
     )]
     pub async fn audio_sink_mute_toggle(&mut self) -> Result<audio::Mute, audio::Error> {

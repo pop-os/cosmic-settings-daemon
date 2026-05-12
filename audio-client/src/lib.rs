@@ -74,6 +74,15 @@ pub trait CosmicAudioProxy {
 
     async fn set_default(&mut self, node_id: u32, save: bool) -> zlink::Result<Result<(), Error>>;
 
+    /// Select the headphone profile of a device, if available.
+    async fn select_headphone_profile(
+        &mut self,
+        device_id: u32,
+    ) -> zlink::Result<Result<(), Error>>;
+
+    /// Select the headset profile of a device, if available.
+    async fn select_headset_profile(&mut self, device_id: u32) -> zlink::Result<Result<(), Error>>;
+
     /// Change the active profile of an audio device; changing which routes are active.
     async fn set_profile(
         &mut self,

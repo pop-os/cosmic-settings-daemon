@@ -64,6 +64,18 @@ impl Server {
         Ok(())
     }
 
+    pub async fn select_headphone_profile(&mut self, device_id: u32) -> Result<(), Error> {
+        let mut model = self.backend.model.lock().await;
+        model.select_headphone_profile(device_id).await;
+        Ok(())
+    }
+
+    pub async fn select_headset_profile(&mut self, device_id: u32) -> Result<(), Error> {
+        let mut model = self.backend.model.lock().await;
+        model.select_headset_profile(device_id).await;
+        Ok(())
+    }
+
     pub async fn set_profile(
         &mut self,
         device_id: u32,
@@ -148,7 +160,7 @@ impl Server {
         set_node_volume(&mut model, id, volume, None)
     }
 
-    pub async fn sink_mute_toggle<'a>(&'a mut self) -> Result<Mute, Error> {
+    pub async fn sink_mute_toggle(&mut self) -> Result<Mute, Error> {
         let mut model = self.backend.model.lock().await;
         let Some(node_id) = model.active_sink_node else {
             return Err(Error::NoActiveSink);
