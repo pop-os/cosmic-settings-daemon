@@ -545,35 +545,20 @@ impl Model {
                     route.description,
                 );
 
-                let mut emit = None;
                 let routes = self.active_routes.entry(id).or_default();
-                if let Some(r) = routes.get(index as usize) {
-                    if r.index != route.index
-                        || r.name != route.name
-                        || r.available != route.available
-                    {
-                        emit = Some(Event::ActiveRoute(
-                            id,
-                            index,
-                            pipewire_route_to_cosmic(&route),
-                        ));
-                    }
-                } else if routes.len() < index as usize + 1 {
+                if routes.len() < index as usize + 1 {
                     let additional = (index as usize + 1) - routes.capacity();
                     routes.reserve_exact(additional);
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
-                    emit = Some(Event::ActiveRoute(
-                        id,
-                        index,
-                        pipewire_route_to_cosmic(&route),
-                    ));
                 }
 
-                routes[index as usize] = route;
-
-                if let Some(event) = emit {
-                    self.emit_event(event).await;
-                }
+                routes[index as usize] = route.clone();
+                self.emit_event(Event::ActiveRoute(
+                    id,
+                    index,
+                    pipewire_route_to_cosmic(&route),
+                ))
+                .await;
             }
 
             pipewire::Event::AddProfile(id, index, profile) => {
