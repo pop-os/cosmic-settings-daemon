@@ -232,6 +232,24 @@ impl Model {
         }
     }
 
+    /// Changes the active route of a device.
+    ///
+    /// Requires using the device ID rather than a node ID.
+    pub async fn set_route(
+        &mut self,
+        device_id: DeviceId,
+        card_profile_device: u32,
+        route_index: u32,
+        save: bool,
+    ) {
+        self.pipewire_send(pipewire::Request::SetRoute(
+            device_id,
+            card_profile_device,
+            route_index,
+            save,
+        ));
+    }
+
     pub fn set_default_sink_node_id(&mut self, node_id: NodeId, save: bool) {
         tracing::debug!(target: "audio-backend", "set default sink node {node_id}");
 
