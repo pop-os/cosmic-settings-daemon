@@ -21,6 +21,12 @@ pub type RouteId = u32;
 
 pub static INITIATED_TIME: OnceLock<std::time::Instant> = OnceLock::new();
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DeviceProfileKind {
+    Headphone,
+    Headset,
+}
+
 #[derive(Debug, Default)]
 struct HeadsetProfiles {
     /// High-fidelity audio quality
@@ -79,6 +85,8 @@ pub struct Model {
     active_routes: IntMap<DeviceId, Vec<pipewire::Route>>,
     /// All known routes that devices can input/output to.
     device_routes: IntMap<DeviceId, Vec<pipewire::Route>>,
+    /// Set when a headset/headphone profile is being applied.
+    applying_device_profile: Option<(DeviceProfileKind, DeviceId)>,
 
     /** Active sink state */
 
@@ -153,6 +161,7 @@ impl Model {
             active_source_not_found: Default::default(),
             source_volume: Default::default(),
             source_mute: Default::default(),
+            applying_device_profile: None,
         }
     }
 
@@ -220,15 +229,10 @@ impl Model {
         if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
             && let Some(profile) = headset_profiles.headphone
         {
+            self.applying_device_profile = Some((DeviceProfileKind::Headphone, device_id));
             self.pipewire_send(pipewire::Request::SetProfile(
                 device_id,
                 profile.index,
-                true,
-            ));
-            self.pipewire_send(pipewire::Request::SetRoute(
-                device_id,
-                profile.card_profile_device,
-                profile.route,
                 true,
             ));
         }
@@ -239,15 +243,10 @@ impl Model {
         if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
             && let Some(profile) = headset_profiles.headset
         {
+            self.applying_device_profile = Some((DeviceProfileKind::Headset, device_id));
             self.pipewire_send(pipewire::Request::SetProfile(
                 device_id,
                 profile.index,
-                true,
-            ));
-            self.pipewire_send(pipewire::Request::SetRoute(
-                device_id,
-                profile.card_profile_device,
-                profile.route,
                 true,
             ));
         }
@@ -472,6 +471,47 @@ impl Model {
                 ))
                 .await;
 
+                // Apply a headphone or headset route after its profile has been assigned.
+                // But first check if the route is available before attempting to set it.
+                if let Some((device_profile_kind, device_id)) = self.applying_device_profile
+                    && device_id == id
+                {
+                    self.applying_device_profile = None;
+
+                    let expected_profile = match device_profile_kind {
+                        DeviceProfileKind::Headphone => self
+                            .device_headset_profiles
+                            .get(device_id)
+                            .and_then(|p| p.headphone),
+
+                        DeviceProfileKind::Headset => self
+                            .device_headset_profiles
+                            .get(device_id)
+                            .and_then(|p| p.headset),
+                    };
+
+                    if let Some(expected_profile) = expected_profile
+                        && expected_profile.index == profile.index as u32
+                    {
+                        for route in self.device_routes.get(device_id).into_iter().flatten() {
+                            if route.index == expected_profile.route as i32 {
+                                if matches!(
+                                    route.available,
+                                    Availability::Yes | Availability::Unknown
+                                ) {
+                                    self.pipewire_send(pipewire::Request::SetRoute(
+                                        device_id,
+                                        expected_profile.card_profile_device,
+                                        expected_profile.route,
+                                        true,
+                                    ));
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 if let Some(prev_headset_port) = self.device_headset_check.get(id).cloned()
                     && let Some(headset_profiles) = self.device_headset_profiles.get(id)
                     && let Some((headphone_info, headset_info)) =
@@ -665,7 +705,6 @@ impl Model {
                                         && matches!(route.port_type, PortType::Headphones)
                                     {
                                         let current = &mut headset_profiles.headphone;
-
                                         if current
                                             .as_ref()
                                             .is_none_or(|c| c.priority <= profile.priority as u32)
