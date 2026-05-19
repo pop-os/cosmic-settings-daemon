@@ -996,6 +996,8 @@ impl State {
             return;
         };
 
+        tracing::debug!(target: "audio-backend", "set_volume device_id {id}, route_index {}, route_device {route_device}, route.device {}, route_name: {}", route.index, route.device, route.name);
+
         let route_props = pod::object!(
             SpaTypes::ObjectParamProps,
             ParamType::Props,
