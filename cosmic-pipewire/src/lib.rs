@@ -607,10 +607,16 @@ impl State {
         // Keep a record of routes attached to a device for setting properties.
         // This will overwrite routes on updates to
         let routes = self.active_routes.entry(id).or_default();
-        if routes.len() < index as usize + 1 {
-            let additional = (index as usize + 1) - routes.capacity();
-            routes.reserve_exact(additional);
-            routes.extend(std::iter::repeat(Route::default()).take(additional));
+        if index == 0 {
+            routes.clear();
+            routes.push(route.clone());
+        } else {
+            if routes.len() < index as usize + 1 {
+                let additional = (index as usize + 1) - routes.capacity();
+                routes.reserve_exact(additional);
+                routes.extend(std::iter::repeat_n(Route::default(), additional));
+            }
+            routes[index as usize] = route.clone();
         }
         routes[index as usize] = route.clone();
 
@@ -664,13 +670,17 @@ impl State {
         // Keep a record of routes attached to a device for setting properties.
         // This will overwrite routes on updates to
         let routes = self.routes.entry(id).or_default();
-        if routes.len() < index as usize + 1 {
-            let additional = (index as usize + 1) - routes.capacity();
-            routes.reserve_exact(additional);
-            routes.extend(std::iter::repeat(Route::default()).take(additional));
+        if index == 0 {
+            routes.clear();
+            routes.push(route.clone());
+        } else {
+            if routes.len() < index as usize + 1 {
+                let additional = (index as usize + 1) - routes.capacity();
+                routes.reserve_exact(additional);
+                routes.extend(std::iter::repeat_n(Route::default(), additional));
+            }
+            routes[index as usize] = route.clone();
         }
-
-        routes[index as usize] = route.clone();
         self.on_event(Event::AddRoute(id, index, route));
     }
 
