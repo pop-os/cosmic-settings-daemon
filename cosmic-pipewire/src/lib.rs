@@ -883,6 +883,7 @@ impl State {
 
         if let Some(param) = Pod::from_bytes(&serialized) {
             device.set_param(ParamType::Route, 0, param);
+            device.enum_params(0, Some(ParamType::Route), 0, u32::MAX);
         }
     }
 
