@@ -618,7 +618,6 @@ impl State {
             }
             routes[index as usize] = route.clone();
         }
-        routes[index as usize] = route.clone();
 
         self.on_event(Event::ActiveRoute(id, index, route));
     }
@@ -885,7 +884,6 @@ impl State {
         if let Some(param) = Pod::from_bytes(&serialized) {
             device.set_param(ParamType::Route, 0, param);
         }
-        return;
     }
 
     fn set_node_props(&mut self, id: NodeId, props: NodeProps) {
@@ -900,7 +898,7 @@ impl State {
 
     fn set_node_volume(&self, id: NodeId, volume: f32, balance: Option<f32>) {
         let Some(props) = self.node_props.get(id) else {
-            tracing::debug!(id, volume, balance, "set_node_volume: no props found");
+            tracing::debug!(target: "audio-backend", id, volume, balance, "set_node_volume: no props found");
             return;
         };
 
@@ -913,6 +911,7 @@ impl State {
             let card_profile_device = card_profile_device as i32;
             if let Some(route) = self.active_node_route(device_id, card_profile_device) {
                 tracing::debug!(
+                    target: "audio-backend",
                     device_id,
                     card_profile_device,
                     "set_node_volume: setting volume"
@@ -944,7 +943,7 @@ impl State {
                     FormatProperties(libspa_sys::SPA_PROP_channelVolumes),
                     ValueArray,
                     pod::ValueArray::Float(volume::to_channel_volumes(
-                        &props.channel_map.as_deref().unwrap_or_default(),
+                        props.channel_map.as_deref().unwrap_or_default(),
                         volume,
                         balance,
                     ))
@@ -996,17 +995,17 @@ impl State {
         &self,
         id: DeviceId,
         props: &NodeProps,
-        route_device: i32,
+        card_profile_device: i32,
         route: &Route,
         volume: f32,
         balance: Option<f32>,
     ) {
         let Some(device) = self.device(id) else {
-            tracing::warn!(id, "device not found for ID");
+            tracing::warn!(target: "audio-backend", id, "device not found for ID");
             return;
         };
 
-        tracing::debug!(target: "audio-backend", "set_volume device_id {id}, route_index {}, route_device {route_device}, route.device {}, route_name: {}", route.index, route.device, route.name);
+        tracing::debug!(target: "audio-backend", "set_volume device_id {id}, route_index {}, card_profile_device {card_profile_device}, route_device {}, route_name: {}", route.index, route.device, route.name);
 
         let route_props = pod::object!(
             SpaTypes::ObjectParamProps,
@@ -1017,7 +1016,7 @@ impl State {
                 ValueArray,
                 pod::ValueArray::Float(if matches!(route.direction, Direction::Output) {
                     volume::to_channel_volumes(
-                        &props.channel_map.as_deref().unwrap_or_default(),
+                        props.channel_map.as_deref().unwrap_or_default(),
                         volume,
                         balance,
                     )
@@ -1041,7 +1040,7 @@ impl State {
                 pod::property!(
                     FormatProperties(libspa_sys::SPA_PARAM_ROUTE_device),
                     Int,
-                    route_device
+                    card_profile_device
                 ),
                 pod::property!(
                     FormatProperties(libspa_sys::SPA_PARAM_ROUTE_props),
@@ -1056,14 +1055,15 @@ impl State {
             )),
         )
         .map(|(cursor, _)| cursor.into_inner()) else {
-            tracing::error!(id, route_device, "failed to serialize pod in set_volume");
+            tracing::error!(target: "audio-backend", id, "failed to serialize pod in set_volume");
             return;
         };
 
         if let Some(param) = Pod::from_bytes(&serialized) {
             tracing::debug!(
+                target: "audio-backend",
                 id,
-                route_device,
+                card_profile_device,
                 volume,
                 balance,
                 "setting volume parameters for route"
