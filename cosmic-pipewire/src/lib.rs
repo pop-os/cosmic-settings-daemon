@@ -716,7 +716,7 @@ impl State {
         self.active_routes
             .get(device_id)?
             .iter()
-            .find(|r| r.devices.contains(&route_device))
+            .find(|r| r.device == route_device || r.devices.contains(&route_device))
     }
 
     fn mono_audio(&mut self, enabled: bool) {
