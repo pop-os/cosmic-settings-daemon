@@ -226,6 +226,11 @@ impl Model {
 
     /// Selects the headphone profile of a device.
     pub async fn select_headphone_profile(&mut self, device_id: u32) {
+        tracing::info!(
+            target: "audio-backend",
+            device_id,
+            "selecting headphone profile"
+        );
         if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
             && let Some(profile) = headset_profiles.headphone
         {
@@ -240,6 +245,12 @@ impl Model {
 
     /// Selects the headset profile of a device.
     pub async fn select_headset_profile(&mut self, device_id: u32) {
+        tracing::info!(
+            target: "audio-backend",
+            device_id,
+            "selecting headset profile"
+        );
+
         if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
             && let Some(profile) = headset_profiles.headset
         {
@@ -465,6 +476,14 @@ impl Model {
             }
 
             pipewire::Event::ActiveProfile(id, profile) => {
+                tracing::info!(
+                    target: "audio-backend",
+                    device = id,
+                    profile = profile.index,
+                    name = profile.name,
+                    "active profile update"
+                );
+
                 self.emit_event(Event::ActiveProfile(
                     id,
                     pipewire_profile_to_cosmic(&profile),
