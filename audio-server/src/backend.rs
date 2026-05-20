@@ -248,7 +248,15 @@ impl Model {
                                 true,
                             ));
                         }
-                        break;
+                    } else if matches!(route.port_type, PortType::Mic)
+                        && matches!(route.available, Availability::Yes | Availability::Unknown)
+                    {
+                        self.pipewire_send(pipewire::Request::SetRoute(
+                            device_id,
+                            profile.card_profile_device,
+                            profile.route,
+                            true,
+                        ));
                     }
                 }
 
@@ -567,7 +575,23 @@ impl Model {
                                         true,
                                     ));
                                 }
-                                break;
+
+                                if let DeviceProfileKind::Headset = device_profile_kind {
+                                    break;
+                                }
+                            } else if matches!(device_profile_kind, DeviceProfileKind::Headphone)
+                                && matches!(route.port_type, PortType::Mic)
+                                && matches!(
+                                    route.available,
+                                    Availability::Yes | Availability::Unknown
+                                )
+                            {
+                                self.pipewire_send(pipewire::Request::SetRoute(
+                                    device_id,
+                                    expected_profile.card_profile_device,
+                                    expected_profile.route,
+                                    true,
+                                ));
                             }
                         }
                     }
