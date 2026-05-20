@@ -963,6 +963,7 @@ impl State {
             return;
         };
 
+        tracing::debug!(target: "audio-backend", device = id, index, save, "set_profile");
         let buffer = std::io::Cursor::new(Vec::new());
         let Ok(serialized) = PodSerializer::serialize(
             buffer,
@@ -987,6 +988,8 @@ impl State {
 
         if let Some(param) = Pod::from_bytes(&serialized) {
             device.set_param(ParamType::Profile, 0, param);
+            device.enum_params(0, Some(ParamType::EnumProfile), 0, u32::MAX);
+            device.enum_params(0, Some(ParamType::Profile), 0, u32::MAX);
         }
     }
 
