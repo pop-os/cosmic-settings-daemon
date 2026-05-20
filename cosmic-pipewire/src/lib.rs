@@ -608,8 +608,7 @@ impl State {
         // This will overwrite routes on updates to
         let routes = self.active_routes.entry(id).or_default();
         if index == 0 {
-            routes.clear();
-            routes.push(route.clone());
+            *routes = vec![route.clone()];
         } else {
             if routes.len() < index as usize + 1 {
                 let additional = (index as usize + 1) - routes.capacity();
@@ -670,8 +669,7 @@ impl State {
         // This will overwrite routes on updates to
         let routes = self.routes.entry(id).or_default();
         if index == 0 {
-            routes.clear();
-            routes.push(route.clone());
+            *routes = vec![route.clone()];
         } else {
             if routes.len() < index as usize + 1 {
                 let additional = (index as usize + 1) - routes.capacity();
