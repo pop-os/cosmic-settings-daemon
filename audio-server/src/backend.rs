@@ -234,6 +234,27 @@ impl Model {
         if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
             && let Some(profile) = headset_profiles.headphone
         {
+            // If the profile is already active, skip the profile and set the route.
+            if let Some(current_profile) = self.active_profiles.get(device_id)
+                && current_profile.index == profile.index as i32
+            {
+                for route in self.device_routes.get(device_id).into_iter().flatten() {
+                    if route.index == profile.route as i32 {
+                        if matches!(route.available, Availability::Yes | Availability::Unknown) {
+                            self.pipewire_send(pipewire::Request::SetRoute(
+                                device_id,
+                                profile.card_profile_device,
+                                profile.route,
+                                true,
+                            ));
+                        }
+                        break;
+                    }
+                }
+
+                return;
+            }
+
             self.applying_device_profile = Some((DeviceProfileKind::Headphone, device_id));
             self.pipewire_send(pipewire::Request::SetProfile(
                 device_id,
@@ -254,6 +275,27 @@ impl Model {
         if let Some(headset_profiles) = self.device_headset_profiles.get(device_id)
             && let Some(profile) = headset_profiles.headset
         {
+            // If the profile is already active, skip the profile and set the route.
+            if let Some(current_profile) = self.active_profiles.get(device_id)
+                && current_profile.index == profile.index as i32
+            {
+                for route in self.device_routes.get(device_id).into_iter().flatten() {
+                    if route.index == profile.route as i32 {
+                        if matches!(route.available, Availability::Yes | Availability::Unknown) {
+                            self.pipewire_send(pipewire::Request::SetRoute(
+                                device_id,
+                                profile.card_profile_device,
+                                profile.route,
+                                true,
+                            ));
+                        }
+                        break;
+                    }
+                }
+
+                return;
+            }
+
             self.applying_device_profile = Some((DeviceProfileKind::Headset, device_id));
             self.pipewire_send(pipewire::Request::SetProfile(
                 device_id,
