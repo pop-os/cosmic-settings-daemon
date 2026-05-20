@@ -638,6 +638,15 @@ impl Model {
                     ));
                 }
 
+                // Ignore headset profile detection for devices which do not apply.
+                if self.device_headset_check.get(id).is_none() {
+                    profiles[index as usize] = profile;
+                    if let Some(event) = emit {
+                        self.emit_event(event).await;
+                    }
+                    return;
+                }
+
                 let headset_profiles = self.device_headset_profiles.entry(id).or_default();
 
                 // An index of 0 implies that we're reloading device's profiles.
@@ -646,7 +655,7 @@ impl Model {
                     headset_profiles.headphone = None;
                 }
 
-                // Track bluetooth and headset profiles
+                // Track headphone and headset profiles
                 if matches!(profile.available, Availability::Yes | Availability::Unknown) {
                     let classes = profile.classes.iter().map(|c| match c {
                         ProfileClass::AudioSink {
@@ -796,7 +805,11 @@ impl Model {
                     icon_name: device.icon_name,
                 };
 
-                self.device_headset_check.insert(device.id, None);
+                // Ignore headset detection for bluetooth devices.
+                if !info.name.starts_with("bluez") {
+                    self.device_headset_check.insert(device.id, None);
+                }
+
                 self.device_info.insert(device.id, info.clone());
                 self.emit_event(Event::Device(device.id, info)).await;
             }
