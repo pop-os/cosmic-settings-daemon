@@ -27,6 +27,7 @@ use zbus::{
     object_server::SignalEmitter,
     zvariant::ObjectPath,
 };
+mod ambient_light;
 mod battery;
 mod brightness_device;
 mod greeter;
@@ -627,6 +628,10 @@ async fn main() -> zbus::Result<()> {
             });
 
             tokio::task::spawn_local(battery::monitor());
+
+            if std::env::var("COSMIC_AMBIENT_LIGHT_PROBE").is_ok() {
+                tokio::task::spawn_local(ambient_light::monitor(sigterm_rx.resubscribe()));
+            }
 
             let conn_clone = connection.clone();
             task::spawn_local(async move {
