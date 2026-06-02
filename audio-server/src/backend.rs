@@ -9,7 +9,9 @@ use futures_util::{SinkExt, StreamExt};
 use intmap::IntMap;
 use pipewire::Availability;
 use std::{
-    process::Stdio, sync::{Arc, OnceLock}, time::Instant
+    process::Stdio,
+    sync::{Arc, OnceLock},
+    time::Instant,
 };
 use tokio::net::unix::pipe;
 use tokio_util::codec::FramedWrite;
@@ -671,7 +673,9 @@ impl Model {
                 );
 
                 let routes = self.active_routes.entry(id).or_default();
-                if routes.len() < index as usize + 1 {
+                if index == 0 {
+                    *routes = vec![pipewire::Route::default()];
+                } else if routes.len() < index as usize + 1 {
                     let additional = (index as usize + 1) - routes.capacity();
                     routes.reserve_exact(additional);
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
@@ -698,6 +702,17 @@ impl Model {
 
                 let mut emit = None;
                 let profiles = self.device_profiles.entry(id).or_default();
+                let headset_profiles = self.device_headset_profiles.entry(id).or_default();
+
+                if index == 0 {
+                    headset_profiles.headset = None;
+                    headset_profiles.headphone = None;
+                    let data = pipewire_profile_to_cosmic(&profile);
+                    *profiles = vec![profile];
+                    self.emit_event(Event::Profile(id, index, data)).await;
+                    return;
+                }
+
                 if let Some(p) = profiles.get(index as usize) {
                     if p.index != profile.index
                         || p.name != profile.name
@@ -730,14 +745,6 @@ impl Model {
                         self.emit_event(event).await;
                     }
                     return;
-                }
-
-                let headset_profiles = self.device_headset_profiles.entry(id).or_default();
-
-                // An index of 0 implies that we're reloading device's profiles.
-                if index == 0 {
-                    headset_profiles.headset = None;
-                    headset_profiles.headphone = None;
                 }
 
                 // Track headphone and headset profiles
@@ -866,7 +873,9 @@ impl Model {
                     .await;
 
                 let routes = self.device_routes.entry(id).or_default();
-                if routes.len() < index as usize + 1 {
+                if index == 0 {
+                    *routes = vec![pipewire::Route::default()]
+                } else if routes.len() < index as usize + 1 {
                     let additional = (index as usize + 1) - routes.capacity();
                     routes.reserve_exact(additional);
                     routes.extend(std::iter::repeat_n(pipewire::Route::default(), additional));
