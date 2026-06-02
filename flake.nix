@@ -2,63 +2,149 @@
   description = "Settings daemon for the COSMIC desktop environment";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
-    nix-filter.url = "github:numtide/nix-filter";
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    fenix = {
-      url = "github:nix-community/fenix";
+    nixpkgs.url = "nixpkgs/nixos-unstable";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, nix-filter, crane, fenix }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" ] (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        craneLib = crane.lib.${system}.overrideToolchain fenix.packages.${system}.stable.toolchain;
+  outputs =
+    {
+      self,
+      nixpkgs,
+      rust-overlay,
+    }:
+    let
+      supportedSystems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
 
-        pkgDef = {
-          src = nix-filter.lib.filter {
-            root = ./.;
-            include = [
-              ./src
-              ./Cargo.toml
-              ./Cargo.lock
-            ];
-          };
-          nativeBuildInputs = with pkgs; [ pkg-config ];
+      pkgsForSystem =
+        system:
+        import nixpkgs {
+          inherit system;
+          overlays = [ (import rust-overlay) ];
+        };
+
+      commonFor =
+        system:
+        let
+          pkgs = pkgsForSystem system;
+          rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           buildInputs = with pkgs; [
-            systemd # For libudev
+            rustToolchain
+            libxkbcommon
+            libinput
+            libpulseaudio.dev
+            pipewire.dev
+            systemd
+            openssl
+            udev
           ];
+
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+          ];
+
+          runtimeDependencies = with pkgs; [
+          ];
+        in
+        {
+          inherit
+            pkgs
+            rustToolchain
+            buildInputs
+            nativeBuildInputs
+            runtimeDependencies
+            ;
         };
+    in
+    {
+      packages = forAllSystems (
+        system:
+        let
+          c = commonFor system;
+          rustPlatform = c.pkgs.makeRustPlatform {
+            cargo = c.rustToolchain;
+            rustc = c.rustToolchain;
+          };
+        in
+        {
+          default = self.packages.${system}.cosmic-settings-daemon;
+          cosmic-settings-daemon = rustPlatform.buildRustPackage {
+            pname = "cosmic-settings-daemon";
+            version = "1.0.8-dev";
 
-        cargoArtifacts = craneLib.buildDepsOnly pkgDef;
-        cosmic-settings-daemon = craneLib.buildPackage (pkgDef // {
-          inherit cargoArtifacts;
-        });
-      in {
-        checks = {
-          inherit cosmic-settings-daemon;
-        };
+            src = c.pkgs.lib.fileset.toSource {
+              root = ./.;
+              fileset = c.pkgs.lib.fileset.unions [
+                ./config
+                ./cosmic-settings-daemon-config
+                ./data
+                ./geonames
+                ./src
+                ./Cargo.toml
+                ./Cargo.lock
+                ./Makefile
+              ];
+            };
 
-        packages.default = cosmic-settings-daemon;
+            cargoLock = {
+              lockFile = ./Cargo.lock;
+              allowBuiltinFetchGit = true;
+            };
 
-        apps.default = flake-utils.lib.mkApp {
-          drv = cosmic-settings-daemon;
-        };
+            separateDebugInfo = true;
 
-        devShells.default = pkgs.mkShell {
-          inputsFrom = builtins.attrValues self.checks.${system};
-        };
-      });
+            buildInputs = c.buildInputs;
+            nativeBuildInputs = c.nativeBuildInputs;
+            runtimeDependencies = c.runtimeDependencies;
 
-  nixConfig = {
-    # Cache for the Rust toolchain in fenix
-    extra-substituters = [ "https://nix-community.cachix.org" ];
-    extra-trusted-public-keys = [ "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs=" ];
-  };
+            makeFlags = [
+              "prefix=${placeholder "out"}"
+              "CARGO_TARGET_DIR=target/${c.pkgs.stdenv.hostPlatform.rust.cargoShortTarget}"
+            ];
+
+            dontCargoInstall = true;
+
+            meta = with c.pkgs.lib; {
+              description = "Settings daemon for the COSMIC desktop environment";
+              homepage = "https://github.com/pop-os/cosmic-settings-daemon";
+              license = licenses.gpl3Only;
+              platforms = platforms.linux;
+              mainProgram = "cosmic-settings-daemon";
+            };
+
+          };
+        }
+      );
+
+      devShells = forAllSystems (
+        system:
+        let
+          c = commonFor system;
+        in
+        {
+          default = c.pkgs.mkShell {
+            inputsFrom = [ self.packages.${system}.cosmic-settings-daemon ];
+
+            packages = with c.pkgs; [
+              c.rustToolchain
+              rust-analyzer
+            ];
+
+            LD_LIBRARY_PATH = c.pkgs.lib.makeLibraryPath c.runtimeDependencies;
+            RUSTFLAGS = "-C link-arg=-Wl,-rpath,${c.pkgs.lib.makeLibraryPath c.runtimeDependencies}";
+
+            shellHook = ''
+              echo "COSMIC Settings Daemon development environment"
+              echo "Run 'cargo build' to build, 'cargo test' to test"
+            '';
+          };
+        }
+      );
+    };
 }
