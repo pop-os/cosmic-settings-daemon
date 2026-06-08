@@ -1087,6 +1087,11 @@ impl Model {
     /// Set the default sink device by its the node ID.
     fn set_default_sink_id(&mut self, node_id: NodeId) {
         tracing::debug!(target: "audio-backend", "set_default_sink_id {node_id}");
+        if let Some((volume, balance)) = self.node_volumes.get(node_id).cloned() {
+            self.sink_volume = volume;
+            self.sink_balance = balance;
+        }
+        self.sink_mute = self.node_mute.get(node_id).cloned().unwrap_or_default();
         self.active_sink_node = Some(node_id);
         self.active_sink_node_name = self
             .node_info
@@ -1098,6 +1103,10 @@ impl Model {
     /// Set the default source device by its the node ID.
     fn set_default_source_id(&mut self, node_id: NodeId) {
         tracing::debug!(target: "audio-backend", "set_default_source_id {node_id}");
+        if let Some((volume, _balance)) = self.node_volumes.get(node_id).cloned() {
+            self.source_volume = volume;
+        }
+        self.source_mute = self.node_mute.get(node_id).cloned().unwrap_or_default();
         self.active_source_node = Some(node_id);
         self.active_source_node_name = self
             .node_info
