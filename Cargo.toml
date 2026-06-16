@@ -55,8 +55,8 @@ xkb-data = "0.2.1"
 zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
 
 # For development and testing purposes
-# [patch.'https://github.com/pop-os/libcosmic']
-# libcosmic = { git = "https://github.com/pop-os/libcosmic//" }
-# iced_futures = { git = "https://github.com/pop-os/libcosmic//" }
-# cosmic-config = { git = "https://github.com/pop-os/libcosmic//" }
-# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//" }
+[patch.'https://github.com/pop-os/libcosmic']
+libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
+iced_futures = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
+cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
+cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
