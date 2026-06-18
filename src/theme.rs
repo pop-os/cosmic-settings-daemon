@@ -123,8 +123,7 @@ impl SunriseSunset {
 
 pub async fn watch_theme(
     theme_mode_rx: &mut tokio::sync::mpsc::Receiver<ThemeMsg>,
-    cleanup_tx: tokio::sync::mpsc::Sender<()>,
-    mut sigterm_rx: tokio::sync::broadcast::Receiver<()>,
+    theme_cancel_rx: &mut tokio::sync::mpsc::Receiver<()>,
 ) -> anyhow::Result<()> {
     let mut override_until_next = false;
 
@@ -231,12 +230,10 @@ pub async fn watch_theme(
         };
 
         tokio::select! {
-            _ = sigterm_rx.recv() => {
-                if let Err(err) = Theme::reset_exports() {
-                    log::error!("Failed to reset the cosmic theme exports. {err:?}");
-                }
-                cleanup_tx.send(()).await.unwrap();
+            _ = theme_cancel_rx.recv() => {
+                return Ok(());
             }
+
             changes = theme_mode_rx.recv() => {
                 let Some(changes) = changes else {
                     bail!("Theme mode changes failed");
