@@ -31,7 +31,6 @@ cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", feat
 cosmic-settings-varlink-server = { path = "./varlink-server" }
 cosmic-theme.export = true
 cosmic-theme.workspace = true
-ctrlc = { version = "3.5.0", features = ["termination"] }
 ddc-hi = "0.4.1"
 dirs = "6.0.0"
 futures = "0.3.31"
@@ -45,7 +44,7 @@ notify = "8.2.0"
 notify-rust = "4.11.7"
 serde = "1.0.228"
 sunrise = "2.1.0"
-tokio = { version = "1.47.1", features = ["macros", "net", "rt"] }
+tokio = { version = "1.47.1", features = ["macros", "net", "rt", "signal"] }
 tokio-stream = "0.1.17"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }

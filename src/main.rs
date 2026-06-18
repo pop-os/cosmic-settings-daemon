@@ -6,28 +6,23 @@ use cosmic_config::ConfigGet;
 use futures::lock::Mutex;
 use logind_session::LogindSessionProxy;
 use notify::{EventKind, Watcher, event::ModifyKind};
-use std::sync::atomic::AtomicU64;
+use std::os::unix::process::CommandExt;
+use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::Duration;
 use std::{
-    collections::{HashMap, HashSet},
-    io,
-    path::PathBuf,
-    sync::{Arc, atomic::Ordering},
+    collections::{HashMap, HashSet}, io, path::PathBuf, sync::{Arc, atomic::Ordering}
 };
 use theme::watch_theme;
+use tokio::signal::unix::SignalKind;
 use tokio::{
-    io::{Interest, unix::AsyncFd},
-    sync::RwLock,
-    task,
+    io::{Interest, unix::AsyncFd}, sync::RwLock, task
 };
 use tokio_stream::StreamExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use zbus::{
-    Connection, MatchRule, MessageStream,
-    names::{MemberName, UniqueName, WellKnownName},
-    object_server::SignalEmitter,
-    zvariant::ObjectPath,
+    Connection, MatchRule, MessageStream, names::{MemberName, UniqueName, WellKnownName}, object_server::SignalEmitter, zvariant::ObjectPath
 };
 mod battery;
 mod brightness_device;
@@ -443,7 +438,33 @@ pub enum Change {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> zbus::Result<()> {
+async fn main() -> ExitCode {
+    let restart_signal = Arc::new(AtomicBool::new(false));
+    let current_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.canonicalize().ok());
+
+    let signal_term_fut = std::pin::pin!({
+        let restart_signal = Arc::clone(&restart_signal);
+        let sigint = tokio::signal::unix::signal(SignalKind::interrupt()).ok();
+        let sigterm = tokio::signal::unix::signal(SignalKind::terminate()).ok();
+        let sighup = tokio::signal::unix::signal(SignalKind::hangup()).ok();
+        async move {
+            let Some(((mut sigint, mut sigterm), mut sighup)) = sigint.zip(sigterm).zip(sighup)
+            else {
+                return futures::future::pending().await;
+            };
+
+            tokio::select! {
+                _ = sigint.recv() => {}
+                _ = sigterm.recv() => {}
+                _ = sighup.recv() => {
+                    restart_signal.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+    });
+
     let log_format = tracing_subscriber::fmt::format()
         .pretty()
         .without_time()
@@ -461,19 +482,11 @@ async fn main() -> zbus::Result<()> {
         .with(log_layer)
         .init();
 
-    let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
-    let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
-
-    ctrlc::set_handler(move || {
-        sigterm_tx.send(()).unwrap();
-    })
-    .expect("Error setting sigterm handler");
-
     if let Err(err) = greeter::sync_with_greeter() {
         log::error!("Failed to sync with greeter. {err:?}");
     }
 
-    task::LocalSet::new()
+    let result: zbus::Result<()> = task::LocalSet::new()
         .run_until(async move {
             let (varlink_daemon, varlink_backend) = cosmic_settings_varlink_server::init().await;
             let varlink_daemon_context = varlink_daemon.0.clone();
@@ -625,21 +638,18 @@ async fn main() -> zbus::Result<()> {
             });
 
             let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
-            task::spawn_local(async move {
+            let (theme_cancel_tx, mut theme_cancel_rx) = tokio::sync::mpsc::channel::<()>(1);
+            let theme_watcher_fut = std::pin::pin!(async move {
                 let mut sleep = Duration::from_millis(100);
 
                 loop {
-                    if let Err(err) = watch_theme(
-                        &mut theme_rx,
-                        theme_cleanup_done_tx.clone(),
-                        sigterm_rx.resubscribe(),
-                    )
-                    .await
-                    {
+                    if let Err(err) = watch_theme(&mut theme_rx, &mut theme_cancel_rx).await {
                         log::error!(
                             "Failed to watch theme {err:?}. Will try again in {}s",
                             sleep.as_secs()
                         );
+                    } else {
+                        break;
                     }
                     tokio::time::sleep(sleep).await;
                     sleep = sleep.saturating_mul(2);
@@ -654,7 +664,7 @@ async fn main() -> zbus::Result<()> {
             });
 
             let conn_clone = connection.clone();
-            task::spawn(async move {
+            let main_fut = std::pin::pin!(async move {
                 while let Some(changes) = rx.recv().await {
                     let Ok(settings_daemon) = conn_clone
                         .object_server()
@@ -761,11 +771,27 @@ async fn main() -> zbus::Result<()> {
                 }
             });
 
-            _ = theme_cleanup_done_rx.recv().await;
-
+            futures::future::join(theme_watcher_fut, async move {
+                futures::future::select(signal_term_fut, main_fut).await;
+                _ = theme_cancel_tx.send(()).await;
+            })
+            .await;
+            _ = cosmic_theme::Theme::reset_exports();
             Ok(())
         })
-        .await
+        .await;
+
+    ExitCode::from(if restart_signal.load(Ordering::Relaxed) {
+        if let Some(current_exe) = current_exe {
+            _ = std::process::Command::new(current_exe).exec();
+        }
+        1
+    } else if let Err(why) = result {
+        eprintln!("cosmic-settings-daemon failed: {why}");
+        1
+    } else {
+        0
+    })
 }
 
 async fn watch_config_message_stream(
