@@ -11,29 +11,37 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::Duration;
 use std::{
-    collections::{HashMap, HashSet}, io, path::PathBuf, sync::{Arc, atomic::Ordering}
+    collections::{HashMap, HashSet},
+    io,
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
 };
 use theme::watch_theme;
 use tokio::signal::unix::SignalKind;
 use tokio::{
-    io::{Interest, unix::AsyncFd}, sync::RwLock, task
+    io::{Interest, unix::AsyncFd},
+    sync::RwLock,
+    task,
 };
 use tokio_stream::StreamExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use zbus::{
-    Connection, MatchRule, MessageStream, names::{MemberName, UniqueName, WellKnownName}, object_server::SignalEmitter, zvariant::ObjectPath
+    Connection, MatchRule, MessageStream,
+    names::{MemberName, UniqueName, WellKnownName},
+    object_server::SignalEmitter,
+    zvariant::ObjectPath,
 };
 mod battery;
 mod brightness_device;
 mod greeter;
-mod input;
 mod locale;
 mod location;
 mod logind_session;
 mod pipewire;
 mod theme;
 mod time;
+mod wayland;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -57,6 +65,7 @@ struct SettingsDaemon {
     watched_states: Arc<
         RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
     >,
+    wayland_sender: calloop::channel::Sender<wayland::Cmd>,
 }
 
 #[derive(Debug)]
@@ -178,9 +187,7 @@ impl SettingsDaemon {
 
     /// Take the current xkb config and switch the active input source.
     async fn input_source_switch(&self) {
-        if let Err(why) = input::source_switch() {
-            log::error!("error switching xkb input source: {why}");
-        }
+        let _ = self.wayland_sender.send(wayland::Cmd::InputSourceSwitch);
     }
 
     #[zbus(property)]
@@ -613,6 +620,7 @@ async fn main() -> ExitCode {
                 display_brightness_device,
                 watched_configs: watched_configs.clone(),
                 watched_states: watched_states.clone(),
+                wayland_sender: wayland::run(),
             };
 
             let connection = zbus::connection::Builder::session()?
