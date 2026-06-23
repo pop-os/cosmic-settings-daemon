@@ -21,10 +21,17 @@ mod spa_utils;
 pub use spa_utils::Channel;
 
 use libspa::{
-    param::{ParamType, format::FormatProperties}, pod::{self, Pod, serialize::PodSerializer}, utils::SpaTypes
+    param::{ParamType, format::FormatProperties},
+    pod::{self, Pod, serialize::PodSerializer},
+    utils::SpaTypes,
 };
 use pipewire::{
-    device::{DeviceChangeMask, DeviceListener}, main_loop::MainLoopWeak, metadata::MetadataListener, node::NodeListener, proxy::{ProxyListener, ProxyT}, types::ObjectType
+    device::{DeviceChangeMask, DeviceListener},
+    main_loop::MainLoopWeak,
+    metadata::MetadataListener,
+    node::NodeListener,
+    proxy::{ProxyListener, ProxyT},
+    types::ObjectType,
 };
 use std::{cell::RefCell, rc::Rc};
 
