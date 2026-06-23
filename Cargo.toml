@@ -60,8 +60,10 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 udev = "0.9.3"
 upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 walkdir = "2.5.0"
-xkb-data = "0.2.1"
 zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
+cctk = { package = "cosmic-client-toolkit", git = "https://github.com/pop-os/cosmic-protocols" }
+calloop = "0.14.4"
+calloop-wayland-source = "0.4.1"
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
