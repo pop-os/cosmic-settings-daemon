@@ -8,7 +8,7 @@ pub mod modifier;
 pub use modifier::{Modifier, Modifiers, ModifiersDef};
 
 mod binding;
-pub use binding::{is_forbidden_unmodified_keysym, Binding};
+pub use binding::{Binding, is_forbidden_unmodified_keysym};
 
 pub mod sym;
 

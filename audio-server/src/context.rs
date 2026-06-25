@@ -3,8 +3,7 @@
 
 use crate::backend::*;
 use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
+    sync::{Arc, Mutex}, time::Duration
 };
 use tokio::sync::mpsc;
 

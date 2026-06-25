@@ -4,8 +4,7 @@
 use std::ffi::c_int;
 
 use crate::{
-    Availability,
-    spa_utils::{array_from_pod, string_from_pod},
+    Availability, spa_utils::{array_from_pod, string_from_pod}
 };
 use libspa::pod::Pod;
 
