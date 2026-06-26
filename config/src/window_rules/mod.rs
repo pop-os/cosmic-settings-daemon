@@ -40,7 +40,7 @@ pub struct WorkspaceAssignment {
     pub appid: String,
     pub title: String,
     pub enabled: bool,
-    pub workspace_id: String,
+    pub workspace_name: String,
 }
 
 // cosmic-config configuration state for `com.system76.CosmicSettings.WindowRules`
@@ -152,7 +152,7 @@ pub fn workspace_assignments(context: &cosmic_config::Config) -> Vec<WorkspaceAs
                     appid: assignment.appid.clone(),
                     title: assignment.title.clone(),
                     enabled: true, // Currently unused.
-                    workspace_id: assignment.workspace_id.clone(),
+                    workspace_name: assignment.workspace_name.clone(),
                 })
             } else {
                 None
