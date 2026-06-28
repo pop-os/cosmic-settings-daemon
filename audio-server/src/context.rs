@@ -31,19 +31,19 @@ impl Context {
 
         let pipewire_backend = Box::pin(async move {
             let mut attempt: u32 = 0;
-            
+
             loop {
                 attempt += 1;
-                
+
                 // Calculate delay for this attempt (0ms for first attempt)
                 let retry_delay: Duration = calculate_retry_delay(attempt);
-                
+
                 let sender = Arc::new((Mutex::new(Vec::new()), tokio::sync::Notify::const_new()));
                 let receiver = sender.clone();
 
                 // Create oneshot channel for initialization callback
                 let (init_tx, init_rx) = tokio::sync::oneshot::channel();
-                
+
                 // Start PipeWire thread with initialization callback
                 let handle = cosmic_pipewire::run(
                     move |event| {
@@ -54,7 +54,7 @@ impl Context {
                         let _ = init_tx.send(result);
                     },
                 );
-                
+
                 _ = tx.send(Message::Init(Arc::new(handle)));
 
                 // Wait for initialization result (with timeout)
@@ -62,11 +62,14 @@ impl Context {
                     Ok(Ok(Ok(()))) => {
                         // Initialization succeeded!
                         if attempt > 1 {
-                            tracing::info!("PipeWire connected successfully after {} attempts", attempt);
+                            tracing::info!(
+                                "PipeWire connected successfully after {} attempts",
+                                attempt
+                            );
                         } else {
                             tracing::info!("PipeWire connected successfully");
                         }
-                        
+
                         // Run the event forwarder (this runs indefinitely)
                         let forwarder = Box::pin(async {
                             loop {
@@ -80,7 +83,7 @@ impl Context {
                         });
 
                         forwarder.await;
-                        
+
                         // If forwarder exits (shouldn't happen normally), restart from attempt 1
                         tracing::warn!("PipeWire forwarder exited unexpectedly, restarting...");
                         attempt = 0;
@@ -89,7 +92,9 @@ impl Context {
                         // Initialization failed with specific error
                         tracing::warn!(
                             "PipeWire initialization failed (attempt {}): {}. Retrying in {:?}",
-                            attempt, err, retry_delay
+                            attempt,
+                            err,
+                            retry_delay
                         );
                         tokio::time::sleep(retry_delay).await;
                     }
@@ -97,7 +102,8 @@ impl Context {
                         // Channel closed - thread exited without calling callback
                         tracing::warn!(
                             "PipeWire initialization callback channel closed (attempt {}). Retrying in {:?}",
-                            attempt, retry_delay
+                            attempt,
+                            retry_delay
                         );
                         tokio::time::sleep(retry_delay).await;
                     }
@@ -105,7 +111,8 @@ impl Context {
                         // Timeout - initialization is taking too long
                         tracing::warn!(
                             "PipeWire initialization timeout (attempt {}). Retrying in {:?}",
-                            attempt, retry_delay
+                            attempt,
+                            retry_delay
                         );
                         tokio::time::sleep(retry_delay).await;
                     }
@@ -124,7 +131,7 @@ impl Context {
 }
 
 /// Calculate the retry delay for a given attempt number.
-/// 
+///
 /// - Attempt 1: 0ms (immediate)
 /// - Attempt 2: 100ms
 /// - Attempt 3: 200ms
@@ -134,7 +141,7 @@ impl Context {
 fn calculate_retry_delay(attempt: u32) -> Duration {
     const BASE_DELAY_MS: u64 = 100;
     const MAX_DOUBLINGS: u32 = 7;
-    
+
     if attempt <= 1 {
         Duration::from_millis(0)
     } else {

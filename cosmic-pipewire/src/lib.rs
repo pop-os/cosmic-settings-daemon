@@ -21,10 +21,17 @@ mod spa_utils;
 pub use spa_utils::Channel;
 
 use libspa::{
-    param::{ParamType, format::FormatProperties}, pod::{self, Pod, serialize::PodSerializer}, utils::SpaTypes
+    param::{ParamType, format::FormatProperties},
+    pod::{self, Pod, serialize::PodSerializer},
+    utils::SpaTypes,
 };
 use pipewire::{
-    device::{DeviceChangeMask, DeviceListener}, main_loop::MainLoopWeak, metadata::MetadataListener, node::NodeListener, proxy::{ProxyListener, ProxyT}, types::ObjectType
+    device::{DeviceChangeMask, DeviceListener},
+    main_loop::MainLoopWeak,
+    metadata::MetadataListener,
+    node::NodeListener,
+    proxy::{ProxyListener, ProxyT},
+    types::ObjectType,
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -42,19 +49,21 @@ pub fn run(
 
     std::thread::spawn(move || {
         let on_event = Box::new(on_event);
-        
+
         // Try to initialize PipeWire connection
         let init_result = try_initialize_pipewire();
-        
+
         // Convert error to String and signal initialization result
         match &init_result {
             Ok(_) => on_init(Ok(())),
             Err(err) => on_init(Err(format!("{:?}", err))),
         }
-        
+
         // Only continue if initialization succeeded
         if let Ok((main_loop, context, core, registry)) = init_result {
-            if let Err(why) = run_service_with_connection(request_rx, on_event, main_loop, context, core, registry) {
+            if let Err(why) = run_service_with_connection(
+                request_rx, on_event, main_loop, context, core, registry,
+            ) {
                 tracing::error!(?why, "failed to run pipewire thread");
             }
         }
@@ -78,7 +87,7 @@ fn try_initialize_pipewire() -> Result<
     let context = pipewire::context::ContextRc::new(&main_loop, None)?;
     let core = context.connect_rc(None)?;
     let registry = core.get_registry_rc()?;
-    
+
     Ok((main_loop, context, core, registry))
 }
 
@@ -91,7 +100,6 @@ fn run_service_with_connection(
     _core: pipewire::core::CoreRc,
     registry: pipewire::registry::RegistryRc,
 ) -> Result<(), pipewire::Error> {
-
     let state = Rc::new(RefCell::new(State {
         main_loop: main_loop.downgrade(),
         proxies: Proxies {
@@ -168,28 +176,28 @@ fn run_service_with_connection(
                         },
                     ) {
                         object.set_property(subject, &key, type_.as_deref(), value.as_deref());
-    }
-}
+                    }
+                }
 
-#[cfg(test)]
-mod run_signature_tests {
-    use super::*;
+                #[cfg(test)]
+                mod run_signature_tests {
+                    use super::*;
 
-    #[test]
-    fn test_run_accepts_init_callback() {
-        // This test verifies the run() function accepts an initialization callback
-        // that receives Result<(), String>
-        let _sender: Sender = run(
-            |_event: Event| {
-                // Event handler (no-op for test)
-            },
-            |result: Result<(), String>| {
-                // Init callback that must accept Result<(), String>
-                let _init_status: Result<(), String> = result;
-            },
-        );
-    }
-}
+                    #[test]
+                    fn test_run_accepts_init_callback() {
+                        // This test verifies the run() function accepts an initialization callback
+                        // that receives Result<(), String>
+                        let _sender: Sender = run(
+                            |_event: Event| {
+                                // Event handler (no-op for test)
+                            },
+                            |result: Result<(), String>| {
+                                // Init callback that must accept Result<(), String>
+                                let _init_status: Result<(), String> = result;
+                            },
+                        );
+                    }
+                }
             }
 
             Request::Quit => {

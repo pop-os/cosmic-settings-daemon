@@ -11,18 +11,26 @@ use std::process::ExitCode;
 use std::sync::atomic::{AtomicBool, AtomicU64};
 use std::time::Duration;
 use std::{
-    collections::{HashMap, HashSet}, io, path::PathBuf, sync::{Arc, atomic::Ordering}
+    collections::{HashMap, HashSet},
+    io,
+    path::PathBuf,
+    sync::{Arc, atomic::Ordering},
 };
 use theme::watch_theme;
 use tokio::signal::unix::SignalKind;
 use tokio::{
-    io::{Interest, unix::AsyncFd}, sync::RwLock, task
+    io::{Interest, unix::AsyncFd},
+    sync::RwLock,
+    task,
 };
 use tokio_stream::StreamExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use zbus::{
-    Connection, MatchRule, MessageStream, names::{MemberName, UniqueName, WellKnownName}, object_server::SignalEmitter, zvariant::ObjectPath
+    Connection, MatchRule, MessageStream,
+    names::{MemberName, UniqueName, WellKnownName},
+    object_server::SignalEmitter,
+    zvariant::ObjectPath,
 };
 mod battery;
 mod brightness_device;
