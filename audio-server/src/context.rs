@@ -30,29 +30,86 @@ impl Context {
         let tx = self.sender.clone();
 
         let pipewire_backend = Box::pin(async move {
+            let mut attempt: u32 = 0;
+            
             loop {
+                attempt += 1;
+                
+                // Calculate delay for this attempt (0ms for first attempt)
+                let retry_delay: Duration = calculate_retry_delay(attempt);
+                
                 let sender = Arc::new((Mutex::new(Vec::new()), tokio::sync::Notify::const_new()));
                 let receiver = sender.clone();
 
-                _ = tx.send(Message::Init(Arc::new(cosmic_pipewire::run(
+                // Create oneshot channel for initialization callback
+                let (init_tx, init_rx) = tokio::sync::oneshot::channel();
+                
+                // Start PipeWire thread with initialization callback
+                let handle = cosmic_pipewire::run(
                     move |event| {
                         sender.0.lock().unwrap().push(event);
                         sender.1.notify_one();
                     },
-                ))));
+                    move |result: Result<(), String>| {
+                        let _ = init_tx.send(result);
+                    },
+                );
+                
+                _ = tx.send(Message::Init(Arc::new(handle)));
 
-                let forwarder = Box::pin(async {
-                    loop {
-                        _ = receiver.1.notified().await;
-                        let events = std::mem::take(&mut *receiver.0.lock().unwrap());
-                        if !events.is_empty() {
-                            _ = tx.send(Message::Server(Arc::from(events)));
-                            tokio::time::sleep(Duration::from_millis(64)).await;
+                // Wait for initialization result (with timeout)
+                match tokio::time::timeout(Duration::from_millis(500), init_rx).await {
+                    Ok(Ok(Ok(()))) => {
+                        // Initialization succeeded!
+                        if attempt > 1 {
+                            tracing::info!("PipeWire connected successfully after {} attempts", attempt);
+                        } else {
+                            tracing::info!("PipeWire connected successfully");
                         }
-                    }
-                });
+                        
+                        // Run the event forwarder (this runs indefinitely)
+                        let forwarder = Box::pin(async {
+                            loop {
+                                _ = receiver.1.notified().await;
+                                let events = std::mem::take(&mut *receiver.0.lock().unwrap());
+                                if !events.is_empty() {
+                                    _ = tx.send(Message::Server(Arc::from(events)));
+                                    tokio::time::sleep(Duration::from_millis(64)).await;
+                                }
+                            }
+                        });
 
-                forwarder.await
+                        forwarder.await;
+                        
+                        // If forwarder exits (shouldn't happen normally), restart from attempt 1
+                        tracing::warn!("PipeWire forwarder exited unexpectedly, restarting...");
+                        attempt = 0;
+                    }
+                    Ok(Ok(Err(err))) => {
+                        // Initialization failed with specific error
+                        tracing::warn!(
+                            "PipeWire initialization failed (attempt {}): {}. Retrying in {:?}",
+                            attempt, err, retry_delay
+                        );
+                        tokio::time::sleep(retry_delay).await;
+                    }
+                    Ok(Err(_)) => {
+                        // Channel closed - thread exited without calling callback
+                        tracing::warn!(
+                            "PipeWire initialization callback channel closed (attempt {}). Retrying in {:?}",
+                            attempt, retry_delay
+                        );
+                        tokio::time::sleep(retry_delay).await;
+                    }
+                    Err(_) => {
+                        // Timeout - initialization is taking too long
+                        tracing::warn!(
+                            "PipeWire initialization timeout (attempt {}). Retrying in {:?}",
+                            attempt, retry_delay
+                        );
+                        tokio::time::sleep(retry_delay).await;
+                    }
+                }
             }
         });
 
@@ -155,5 +212,13 @@ mod tests {
     fn test_retry_delay_hundredth_attempt_still_capped() {
         let delay: Duration = calculate_retry_delay(100);
         assert_eq!(delay, Duration::from_millis(12800));
+    }
+
+    #[tokio::test]
+    async fn test_context_with_retry_mechanism() {
+        // This test verifies that the context compiles and can be created
+        // with the retry mechanism in place. It doesn't actually connect to PipeWire.
+        let (_ctx, _rx) = Context::new().await;
+        // Success: context created without errors
     }
 }
