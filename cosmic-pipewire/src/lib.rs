@@ -34,28 +34,63 @@ pub type DeviceId = u32;
 pub type ProfileId = i32;
 pub type PipewireId = u32;
 
-pub fn run(on_event: impl FnMut(Event) + Send + 'static) -> Sender {
+pub fn run(
+    on_event: impl FnMut(Event) + Send + 'static,
+    on_init: impl FnOnce(Result<(), String>) + Send + 'static,
+) -> Sender {
     let (request_tx, request_rx) = pipewire::channel::channel();
 
     std::thread::spawn(move || {
         let on_event = Box::new(on_event);
-        if let Err(why) = run_service(request_rx, on_event) {
-            tracing::error!(?why, "failed to run pipewire thread");
+        
+        // Try to initialize PipeWire connection
+        let init_result = try_initialize_pipewire();
+        
+        // Convert error to String and signal initialization result
+        match &init_result {
+            Ok(_) => on_init(Ok(())),
+            Err(err) => on_init(Err(format!("{:?}", err))),
+        }
+        
+        // Only continue if initialization succeeded
+        if let Ok((main_loop, context, core, registry)) = init_result {
+            if let Err(why) = run_service_with_connection(request_rx, on_event, main_loop, context, core, registry) {
+                tracing::error!(?why, "failed to run pipewire thread");
+            }
         }
     });
 
     Sender(request_tx)
 }
 
-/// Monitor pipewire activity and
-fn run_service(
-    rx: pipewire::channel::Receiver<Request>,
-    on_event: Box<dyn FnMut(Event)>,
-) -> Result<(), pipewire::Error> {
+/// Attempt to initialize PipeWire connection components.
+/// Returns all components needed for the service if successful.
+fn try_initialize_pipewire() -> Result<
+    (
+        pipewire::main_loop::MainLoopRc,
+        pipewire::context::ContextRc,
+        pipewire::core::CoreRc,
+        pipewire::registry::RegistryRc,
+    ),
+    pipewire::Error,
+> {
     let main_loop = pipewire::main_loop::MainLoopRc::new(None)?;
     let context = pipewire::context::ContextRc::new(&main_loop, None)?;
     let core = context.connect_rc(None)?;
     let registry = core.get_registry_rc()?;
+    
+    Ok((main_loop, context, core, registry))
+}
+
+/// Monitor pipewire activity and process requests with pre-initialized connection.
+fn run_service_with_connection(
+    rx: pipewire::channel::Receiver<Request>,
+    on_event: Box<dyn FnMut(Event)>,
+    main_loop: pipewire::main_loop::MainLoopRc,
+    _context: pipewire::context::ContextRc,
+    _core: pipewire::core::CoreRc,
+    registry: pipewire::registry::RegistryRc,
+) -> Result<(), pipewire::Error> {
 
     let state = Rc::new(RefCell::new(State {
         main_loop: main_loop.downgrade(),
@@ -133,8 +168,28 @@ fn run_service(
                         },
                     ) {
                         object.set_property(subject, &key, type_.as_deref(), value.as_deref());
-                    }
-                }
+    }
+}
+
+#[cfg(test)]
+mod run_signature_tests {
+    use super::*;
+
+    #[test]
+    fn test_run_accepts_init_callback() {
+        // This test verifies the run() function accepts an initialization callback
+        // that receives Result<(), String>
+        let _sender: Sender = run(
+            |_event: Event| {
+                // Event handler (no-op for test)
+            },
+            |result: Result<(), String>| {
+                // Init callback that must accept Result<(), String>
+                let _init_status: Result<(), String> = result;
+            },
+        );
+    }
+}
             }
 
             Request::Quit => {
