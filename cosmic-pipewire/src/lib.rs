@@ -26,6 +26,7 @@ use libspa::{
 use pipewire::{
     device::{DeviceChangeMask, DeviceListener}, main_loop::MainLoopWeak, metadata::MetadataListener, node::NodeListener, proxy::{ProxyListener, ProxyT}, types::ObjectType
 };
+use std::time::Duration;
 use std::{cell::RefCell, rc::Rc};
 
 pub type NodeId = u32;
@@ -34,23 +35,33 @@ pub type DeviceId = u32;
 pub type ProfileId = i32;
 pub type PipewireId = u32;
 
-pub fn run(on_event: impl FnMut(Event) + Send + 'static) -> Sender {
-    let (request_tx, request_rx) = pipewire::channel::channel();
-
+pub fn run(
+    on_event: impl FnMut(Event) + Send + 'static,
+    mut on_sender: impl FnMut(Sender) + Send + 'static,
+) {
     std::thread::spawn(move || {
-        let on_event = Box::new(on_event);
-        if let Err(why) = run_service(request_rx, on_event) {
-            tracing::error!(?why, "failed to run pipewire thread");
+        let on_event: Rc<RefCell<dyn FnMut(Event)>> = Rc::new(RefCell::new(on_event));
+        let mut attempt: u32 = 1;
+        loop {
+            let (request_tx, request_rx) = pipewire::channel::channel();
+            on_sender(Sender(request_tx));
+            if let Err(why) = run_service(request_rx, Rc::clone(&on_event)) {
+                if let pipewire::Error::CreationFailed = why {
+                    std::thread::sleep(Duration::from_secs(u32::pow(attempt, 2) as u64));
+                    attempt += 1;
+                    continue;
+                }
+                tracing::error!(?why, "failed to run pipewire thread");
+            }
+            break;
         }
     });
-
-    Sender(request_tx)
 }
 
 /// Monitor pipewire activity and
 fn run_service(
     rx: pipewire::channel::Receiver<Request>,
-    on_event: Box<dyn FnMut(Event)>,
+    on_event: Rc<RefCell<dyn FnMut(Event)>>,
 ) -> Result<(), pipewire::Error> {
     let main_loop = pipewire::main_loop::MainLoopRc::new(None)?;
     let context = pipewire::context::ContextRc::new(&main_loop, None)?;
@@ -595,7 +606,7 @@ struct State {
     /// Associates a node with a card profile device for matching nodes to routes.
     node_card_profile_device: IntMap<NodeId, u32>,
     /// Handle events and exit the loop when `true` is returned.
-    on_event: Box<dyn FnMut(Event)>,
+    on_event: Rc<RefCell<dyn FnMut(Event)>>,
 }
 
 impl State {
@@ -721,7 +732,7 @@ impl State {
     }
 
     fn on_event(&mut self, event: Event) {
-        (self.on_event)(event);
+        self.on_event.borrow_mut()(event);
     }
 
     fn quit(&mut self) {

@@ -3,8 +3,7 @@
 
 use crate::backend::*;
 use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
+    sync::{Arc, Mutex}, time::Duration
 };
 use tokio::sync::mpsc;
 
@@ -30,29 +29,29 @@ impl Context {
         let tx = self.sender.clone();
 
         let pipewire_backend = Box::pin(async move {
-            loop {
-                let sender = Arc::new((Mutex::new(Vec::new()), tokio::sync::Notify::const_new()));
-                let receiver = sender.clone();
+            let sender = Arc::new((Mutex::new(Vec::new()), tokio::sync::Notify::const_new()));
+            let receiver = sender.clone();
 
-                _ = tx.send(Message::Init(Arc::new(cosmic_pipewire::run(
-                    move |event| {
-                        sender.0.lock().unwrap().push(event);
-                        sender.1.notify_one();
-                    },
-                ))));
-
-                let forwarder = Box::pin(async {
-                    loop {
-                        _ = receiver.1.notified().await;
-                        let events = std::mem::take(&mut *receiver.0.lock().unwrap());
-                        if !events.is_empty() {
-                            _ = tx.send(Message::Server(Arc::from(events)));
-                            tokio::time::sleep(Duration::from_millis(64)).await;
-                        }
+            cosmic_pipewire::run(
+                move |event| {
+                    sender.0.lock().unwrap().push(event);
+                    sender.1.notify_one();
+                },
+                {
+                    let tx = tx.clone();
+                    move |init_sender| {
+                        _ = tx.send(Message::Init(Arc::new(init_sender)));
                     }
-                });
+                },
+            );
 
-                forwarder.await
+            loop {
+                _ = receiver.1.notified().await;
+                let events = std::mem::take(&mut *receiver.0.lock().unwrap());
+                if !events.is_empty() {
+                    _ = tx.send(Message::Server(Arc::from(events)));
+                    tokio::time::sleep(Duration::from_millis(64)).await;
+                }
             }
         });
 
