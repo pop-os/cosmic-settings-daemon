@@ -111,9 +111,9 @@ impl Binding {
     pub fn is_set(&self) -> bool {
         (self.has_modifier() && self.key.is_some())
             || self.is_super()
-            || self.key.map_or(false, |key| {
-                !is_forbidden_unmodified_keysym(key)
-            })
+            || self
+                .key
+                .map_or(false, |key| !is_forbidden_unmodified_keysym(key))
     }
 
     /// Check if the key binding is binding directly to Super
