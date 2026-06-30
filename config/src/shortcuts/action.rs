@@ -31,6 +31,9 @@ pub enum Action {
     /// Migrate the active workspace to the next output
     MigrateWorkspaceToNextOutput,
 
+    // Move active workspace one place in direction
+    MoveWorkspace(Direction),
+
     /// Migrate the active workspace to the output in the given direction
     MigrateWorkspaceToOutput(Direction),
 
