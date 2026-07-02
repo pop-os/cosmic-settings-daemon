@@ -5,7 +5,7 @@ use std::{path::Path, time::Duration};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::{Receiver, error::TryRecvError};
 use tokio_stream::StreamExt;
-use upower_dbus::BatteryLevel;
+use upower_dbus::{BatteryLevel, BatteryState};
 use zbus::Connection;
 
 // TODO: Add config parameter for changing the preferred sound theme.
@@ -15,10 +15,9 @@ pub async fn monitor() {
         return;
     };
 
-    let ac_plugged = ac_plug_events.plugged();
     let (ac_plug_tx, ac_plug_rx) = tokio::sync::mpsc::channel(1);
     tokio::task::spawn_local(ac_plug_monitor(ac_plug_events, ac_plug_tx));
-    low_power_monitor(ac_plugged, ac_plug_rx).await;
+    low_power_monitor(ac_plug_rx).await;
 }
 
 /// Watch AC plug events and emit sounds on plug event changes.
@@ -50,7 +49,7 @@ pub async fn ac_plug_monitor(
     }
 }
 
-pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<acpid_plug::Event>) {
+pub async fn low_power_monitor(mut ac_plug_rx: Receiver<acpid_plug::Event>) {
     let Ok(conn) = Connection::system().await else {
         return;
     };
@@ -67,6 +66,7 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
     let mut last_critical_notification = Instant::now();
     let mut last_low_notification = last_critical_notification;
     let mut percent_changed_stream = device.receive_percentage_changed().await;
+    let mut state_changed_stream = device.receive_state_changed().await;
 
     let (nag_tx, nag_rx) = tokio::sync::mpsc::channel(1);
 
@@ -79,12 +79,24 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
                     break
                 };
 
-                ac_plugged = event == acpid_plug::Event::Plugged;
+                let plugged = event == acpid_plug::Event::Plugged;
 
                 on_ac_plug(event, current_battery);
 
                 if BatteryLevel::Critical == current_battery {
-                    let _res = nag_tx.send(!ac_plugged).await;
+                    let _res = nag_tx.send(!plugged).await;
+                }
+            },
+
+            result = state_changed_stream.next() => {
+                let Some(message) = result else {
+                    break
+                };
+
+                if let Ok(state) = message.get().await {
+                    if current_battery == BatteryLevel::Critical {
+                        let _res = nag_tx.send(state == BatteryState::Discharging).await;
+                    }
                 }
             },
 
@@ -96,12 +108,18 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
                 if let Ok(new_percent) = message.get().await {
                     match new_percent {
                         percent if percent < 10.0 => {
+                            let discharging = matches!(
+                                device.state().await,
+                                Ok(BatteryState::Discharging)
+                            );
+
                             if current_battery == BatteryLevel::Critical {
+                                let _res = nag_tx.send(discharging).await;
                                 continue
                             }
 
                             current_battery = BatteryLevel::Critical;
-                            let _res = nag_tx.send(!ac_plugged).await;
+                            let _res = nag_tx.send(discharging).await;
 
                             let now = Instant::now();
                             if now.duration_since(last_critical_notification) > Duration::from_secs(30) {
