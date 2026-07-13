@@ -46,7 +46,7 @@ impl Binding {
         Binding {
             description: None,
             modifiers: modifiers.into(),
-            keycode: None,
+            keycode: key.map(|key| key.raw()),
             key: None,
         }
     }
@@ -109,11 +109,12 @@ impl Binding {
 
     /// Check if the binding has been set
     pub fn is_set(&self) -> bool {
-        (self.has_modifier() && self.key.is_some())
-            || self.is_super()
-            || self.key.map_or(false, |key| {
-                !is_forbidden_unmodified_keysym(key)
-            })
+        (self.has_modifier() && (self.key.is_some() || self.keycode.is_some()))
+            || self.is_modifier_only()
+            || self
+                .key
+                .is_some_and(|key| !is_forbidden_unmodified_keysym(key))
+            || self.keycode.is_some()
     }
 
     /// Check if the key binding is binding directly to Super
@@ -123,6 +124,16 @@ impl Binding {
             && !self.modifiers.shift
             && !self.modifiers.alt
             && !self.modifiers.ctrl
+    }
+
+    /// Check if the binding contains either Super alone or multiple modifiers.
+    pub fn is_modifier_only(&self) -> bool {
+        let modifier_count = self.modifiers.logo as u8
+            + self.modifiers.shift as u8
+            + self.modifiers.alt as u8
+            + self.modifiers.ctrl as u8;
+
+        self.key.is_none() && self.keycode.is_none() && (self.is_super() || modifier_count >= 2)
     }
 
     /// Get the inferred direction of a xkb key
@@ -169,12 +180,13 @@ impl Binding {
             && (self.modifiers.shift & other.modifiers.shift == self.modifiers.shift)
             && (self.modifiers.logo & other.modifiers.logo == self.modifiers.logo)
             && (self.key.is_none() || self.key == other.key)
+            && (self.keycode.is_none() || self.keycode == other.keycode)
     }
 }
 
 impl PartialEq for Binding {
     fn eq(&self, other: &Self) -> bool {
-        self.modifiers == other.modifiers && self.key == other.key
+        self.modifiers == other.modifiers && self.key == other.key && self.keycode == other.keycode
     }
 }
 
@@ -189,6 +201,7 @@ impl ToString for Binding {
 impl Hash for Binding {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.key.hash(state);
+        self.keycode.hash(state);
         self.modifiers.hash(state);
     }
 }
@@ -198,7 +211,7 @@ impl FromStr for Binding {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let binding = Binding::from_str_partial(value)?;
-        if binding.key.is_none() && !binding.modifiers.logo {
+        if binding.key.is_none() && !binding.is_modifier_only() {
             return Err(format!("no key was defined for this binding"));
         }
 
@@ -271,8 +284,15 @@ mod tests {
             ))
         );
 
-        // Must have a non-modifier key.
-        assert!(matches!(Binding::from_str("Super+Shift"), Err(_)));
+        assert_eq!(
+            Binding::from_str("Alt+Shift"),
+            Ok(Binding::new(Modifiers::new().alt().shift(), None))
+        );
+
+        assert!(Binding::from_str("Caps_Lock").unwrap().is_set());
+
+        // A single modifier other than Super is not a complete binding.
+        assert!(matches!(Binding::from_str("Shift"), Err(_)));
 
         // Can't have multiple non-modifier keys.
         assert!(matches!(Binding::from_str("Super+Up+Down"), Err(_)));
@@ -295,6 +315,21 @@ mod tests {
         // At least one key is required.
         assert!(matches!(Binding::from_str(" "), Err(_)));
     }
+
+    #[test]
+    fn keycode_is_part_of_binding_identity() {
+        let caps_lock = Binding::new_keycode(
+            Modifiers::new(),
+            Some(xkbcommon::xkb::Keycode::new(66)),
+        );
+        let num_lock = Binding::new_keycode(
+            Modifiers::new(),
+            Some(xkbcommon::xkb::Keycode::new(77)),
+        );
+
+        assert_eq!(caps_lock.keycode, Some(66));
+        assert_ne!(caps_lock, num_lock);
+    }
 }
 
 pub fn is_forbidden_unmodified_keysym(key: xkb::Keysym) -> bool {
@@ -309,21 +344,6 @@ pub fn is_forbidden_unmodified_keysym(key: xkb::Keysym) -> bool {
         0xff89            | // KP_Tab
         0xff0d            | // Return
         0xff8d            | // KP_Enter
-        0xff7e            | // Mode_switch
-        0xff14            | // Scroll_Lock
-        0xff15            | // Sys_Req
-        0xff20            | // Multi_key (Compose)
-        0xff7f            | // Num_Lock
-        0xffe5            | // Caps_Lock
-        0xfe01            | // ISO_Lock
-        0xfe08            | // ISO_Next_Group
-        0xfe0a            | // ISO_Prev_Group
-        0xfe0c            | // ISO_First_Group
-        0xfe0e            | // ISO_Last_Group
-        0xfed0..=0xfed2   | // First/Prev/Next_Virtual_Screen
-        0xfed4            | // Last_Virtual_Screen
-        0xfed5            | // Terminate_Server
-        0xfe7a            | // AudibleBell_Enable
         0x04a1..=0x04df   | // Kana (Japanese)
         0x05ac..=0x05f2   | // Arabic
         0x06a1..=0x06ff   | // Cyrillic
