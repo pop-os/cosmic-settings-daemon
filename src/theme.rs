@@ -629,12 +629,15 @@ fn set_flatpak_overrides() {
     ];
 
     tokio::spawn(async {
-        _ = tokio::process::Command::new("flatpak")
-            .arg("override")
-            .arg("--user")
-            .arg("--env=QT_QPA_PLATFORMTHEME=kde")
-            .status()
-            .await;
+        // Unset incorrectly-defined platform theme.
+        if let Some(mut overrides_path) = std::env::home_dir() {
+            overrides_path = overrides_path.join(".local/share/flatpak/overrides/global");
+            if let Ok(mut overrides) = tokio::fs::read_to_string(&overrides_path).await {
+                overrides = overrides.replace("\nQT_QPA_PLATFORMTHEME=kde", "");
+                _ = tokio::fs::write(&overrides_path, overrides.as_bytes()).await;
+            }
+        }
+
         for path in paths_to_expose {
             _ = tokio::process::Command::new("flatpak")
                 .arg("override")
