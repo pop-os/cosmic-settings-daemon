@@ -318,14 +318,10 @@ mod tests {
 
     #[test]
     fn keycode_is_part_of_binding_identity() {
-        let caps_lock = Binding::new_keycode(
-            Modifiers::new(),
-            Some(xkbcommon::xkb::Keycode::new(66)),
-        );
-        let num_lock = Binding::new_keycode(
-            Modifiers::new(),
-            Some(xkbcommon::xkb::Keycode::new(77)),
-        );
+        let caps_lock =
+            Binding::new_keycode(Modifiers::new(), Some(xkbcommon::xkb::Keycode::new(66)));
+        let num_lock =
+            Binding::new_keycode(Modifiers::new(), Some(xkbcommon::xkb::Keycode::new(77)));
 
         assert_eq!(caps_lock.keycode, Some(66));
         assert_ne!(caps_lock, num_lock);
