@@ -1,8 +1,6 @@
 use geonames::GeoPosition;
 use std::{
-    collections::BTreeMap,
-    fs,
-    io::{self, BufRead},
+    collections::BTreeMap, fs, io::{self, BufRead}
 };
 
 #[tokio::main]
