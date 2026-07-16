@@ -275,7 +275,7 @@ impl SettingsDaemon {
             .lock()
             .await
             .audio_server
-            .sink_volume_raise(5)
+            .sink_volume_raise()
             .await
         {
             log::error!("Failed to raise volume: {}", why);
@@ -288,7 +288,7 @@ impl SettingsDaemon {
             .lock()
             .await
             .audio_server
-            .sink_volume_lower(5)
+            .sink_volume_lower()
             .await
         {
             log::error!("Failed to lower volume: {}", why);
