@@ -651,12 +651,7 @@ fn set_gnome_monospace_font_name(font_name: String) {
 }
 
 fn set_flatpak_overrides() {
-    let paths_to_expose = vec![
-        "xdg-config/gtk-4.0:ro",
-        "xdg-config/gtk-3.0:ro",
-        "xdg-config/kdeglobals:ro",
-        "xdg-data/color-schemes:ro",
-    ];
+    let paths_to_expose = vec!["xdg-config/gtk-4.0:ro", "xdg-config/gtk-3.0:ro"];
 
     tokio::spawn(async {
         // Unset incorrectly-defined platform theme.
