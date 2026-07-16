@@ -1,1 +1,1 @@
-imports_layout = "Horizontal"
+imports_granularity = "Module"

@@ -14,28 +14,26 @@ mod profile;
 pub use profile::{Profile, ProfileClass};
 
 mod route;
-pub use route::PortType;
-pub use route::{Route, RouteProps};
+pub use route::{PortType, Route, RouteProps};
 
 mod spa_utils;
 pub use spa_utils::Channel;
 
-use libspa::{
-    param::{ParamType, format::FormatProperties},
-    pod::{self, Pod, serialize::PodSerializer},
-    utils::SpaTypes,
-};
-use pipewire::{
-    device::{DeviceChangeMask, DeviceListener},
-    main_loop::MainLoopWeak,
-    metadata::MetadataListener,
-    node::NodeListener,
-    proxy::{ProxyListener, ProxyT},
-    registry::{GlobalObject, Registry},
-    types::ObjectType,
-};
+use libspa::param::ParamType;
+use libspa::param::format::FormatProperties;
+use libspa::pod::serialize::PodSerializer;
+use libspa::pod::{self, Pod};
+use libspa::utils::SpaTypes;
+use pipewire::device::{DeviceChangeMask, DeviceListener};
+use pipewire::main_loop::MainLoopWeak;
+use pipewire::metadata::MetadataListener;
+use pipewire::node::NodeListener;
+use pipewire::proxy::{ProxyListener, ProxyT};
+use pipewire::registry::{GlobalObject, Registry};
+use pipewire::types::ObjectType;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::time::Duration;
-use std::{cell::RefCell, rc::Rc};
 
 pub type NodeId = u32;
 pub type RouteId = u32;
@@ -437,10 +435,10 @@ where
 
                     match key {
                         "node.features.audio.mono" => {
-                            if let Ok(value) = serde_json::de::from_str::<BooleanProperty>(value) {
-                                if let Some(state) = state.upgrade() {
-                                    state.borrow_mut().mono_audio(value.value);
-                                }
+                            if let Ok(value) = serde_json::de::from_str::<BooleanProperty>(value)
+                                && let Some(state) = state.upgrade()
+                            {
+                                state.borrow_mut().mono_audio(value.value);
                             }
                         }
 

@@ -8,9 +8,9 @@ use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDa
 use futures_util::{SinkExt, StreamExt};
 use intmap::IntMap;
 use pipewire::Availability;
-use std::{
-    process::Stdio, sync::{Arc, OnceLock}, time::Instant
-};
+use std::process::Stdio;
+use std::sync::{Arc, OnceLock};
+use std::time::Instant;
 use tokio::net::unix::pipe;
 use tokio_util::codec::FramedWrite;
 

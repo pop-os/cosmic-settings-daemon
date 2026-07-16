@@ -4,7 +4,8 @@
 //! Interfaces for implementing the varlink methods for `com.system76.CosmicSettings.Audio`.
 
 use cosmic_settings_audio_core::{Error, Mute, Node, Volume};
-use std::{os::fd::OwnedFd, sync::Arc};
+use std::os::fd::OwnedFd;
+use std::sync::Arc;
 
 use crate::{config, context};
 

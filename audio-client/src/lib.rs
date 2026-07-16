@@ -8,7 +8,8 @@ pub use zlink;
 use zlink::Connection;
 
 pub use cosmic_settings_audio_core::*;
-use std::{os::fd::OwnedFd, path::PathBuf};
+use std::os::fd::OwnedFd;
+use std::path::PathBuf;
 
 pub async fn connect() -> zlink::Result<Client> {
     zlink::unix::connect(socket_path())

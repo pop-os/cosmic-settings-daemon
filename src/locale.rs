@@ -6,8 +6,8 @@ use cosmic_config::{ConfigGet, ConfigSet};
 use tokio::sync::mpsc::Receiver;
 use tokio_stream::StreamExt;
 
-pub const COSMIC_COMP_ID: &'static str = "com.system76.CosmicComp";
-pub const COSMIC_COMP_XDG_KEY: &'static str = "xkb_config";
+pub const COSMIC_COMP_ID: &str = "com.system76.CosmicComp";
+pub const COSMIC_COMP_XDG_KEY: &str = "xkb_config";
 
 pub async fn sync_locale1(mut rx: Receiver<()>) -> anyhow::Result<()> {
     let conn = zbus::Connection::system().await?;

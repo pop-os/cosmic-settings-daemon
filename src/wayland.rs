@@ -2,20 +2,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use calloop_wayland_source::WaylandSource;
-use cctk::{
-    cosmic_protocols::keyboard_layout::v1::client::zcosmic_keyboard_layout_v1::ZcosmicKeyboardLayoutV1,
-    keyboard_layout::{KeyboardLayoutHandler, KeyboardLayoutState},
-    sctk::{
-        self,
-        registry::{ProvidesRegistryState, RegistryState},
-        seat::{Capability, SeatHandler, SeatState},
-    },
-    wayland_client::{
-        Connection, QueueHandle, delegate_noop,
-        globals::registry_queue_init,
-        protocol::{wl_keyboard, wl_seat},
-    },
-};
+use cctk::cosmic_protocols::keyboard_layout::v1::client::zcosmic_keyboard_layout_v1::ZcosmicKeyboardLayoutV1;
+use cctk::keyboard_layout::{KeyboardLayoutHandler, KeyboardLayoutState};
+use cctk::sctk::registry::{ProvidesRegistryState, RegistryState};
+use cctk::sctk::seat::{Capability, SeatHandler, SeatState};
+use cctk::sctk::{self};
+use cctk::wayland_client::globals::registry_queue_init;
+use cctk::wayland_client::protocol::{wl_keyboard, wl_seat};
+use cctk::wayland_client::{Connection, QueueHandle, delegate_noop};
 use cosmic_comp_config::XkbConfig;
 use cosmic_config::ConfigGet;
 use std::thread;
@@ -74,14 +68,14 @@ struct AppData {
 
 impl AppData {
     fn input_source_switch(&mut self) {
-        if let Some(keyboard) = &self.keyboard {
-            if let Some(xkb) = xkb_config() {
-                let count = xkb.layout.split_terminator(',').count();
+        if let Some(keyboard) = &self.keyboard
+            && let Some(xkb) = xkb_config()
+        {
+            let count = xkb.layout.split_terminator(',').count();
 
-                let group = (self.current_layout + 1) % count as u32;
-                keyboard.keyboard_layout.set_group(group);
-                self.current_layout = group;
-            }
+            let group = (self.current_layout + 1) % count as u32;
+            keyboard.keyboard_layout.set_group(group);
+            self.current_layout = group;
         }
     }
 }

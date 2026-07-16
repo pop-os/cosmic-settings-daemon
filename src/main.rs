@@ -5,33 +5,29 @@ use brightness_device::BrightnessDevice;
 use cosmic_config::ConfigGet;
 use futures::lock::Mutex;
 use logind_session::LogindSessionProxy;
-use notify::{EventKind, Watcher, event::ModifyKind};
+use notify::event::ModifyKind;
+use notify::{EventKind, Watcher};
+use std::collections::{HashMap, HashSet};
+use std::io;
 use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
-use std::{
-    collections::{HashMap, HashSet},
-    io,
-    path::PathBuf,
-    sync::{Arc, atomic::Ordering},
-};
 use theme::watch_theme;
+use tokio::io::Interest;
+use tokio::io::unix::AsyncFd;
 use tokio::signal::unix::SignalKind;
-use tokio::{
-    io::{Interest, unix::AsyncFd},
-    sync::RwLock,
-    task,
-};
+use tokio::sync::RwLock;
+use tokio::task;
 use tokio_stream::StreamExt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use zbus::{
-    Connection, MatchRule, MessageStream,
-    names::{MemberName, UniqueName, WellKnownName},
-    object_server::SignalEmitter,
-    zvariant::ObjectPath,
-};
+use zbus::names::{MemberName, UniqueName, WellKnownName};
+use zbus::object_server::SignalEmitter;
+use zbus::zvariant::ObjectPath;
+use zbus::{Connection, MatchRule, MessageStream};
 mod battery;
 mod brightness_device;
 mod greeter;
@@ -192,14 +188,14 @@ impl SettingsDaemon {
 
     #[zbus(property)]
     async fn max_display_brightness(&self) -> i32 {
-        self.display_brightness_device.max_brightness() as i32
+        self.display_brightness_device.max_brightness()
     }
 
     #[zbus(property)]
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
             // Align with slider behavior and device clamp: floor at 1 for backlight
-            let max = self.display_brightness_device.max_brightness() as i32;
+            let max = self.display_brightness_device.max_brightness();
             let min = self.display_brightness_device.min_brightness() as i32;
 
             let clamped = value.clamp(min, max);
@@ -262,7 +258,6 @@ impl SettingsDaemon {
                 log::error!(
                     "Failed to toggle screen reader. Could not apply current state. {err:?}"
                 );
-                return;
             }
         } else {
             log::error!("Failed to toggle screen reader.")
@@ -374,7 +369,7 @@ async fn choose_best_backlight(udev_devices: &HashMap<PathBuf, udev::Device>) ->
         }
     }
 
-    best_backlight.unwrap_or_else(|| BrightnessDevice::external())
+    best_backlight.unwrap_or_else(BrightnessDevice::external)
 }
 
 async fn backlight_monitor_task(
@@ -560,13 +555,11 @@ async fn main() -> ExitCode {
                                     .and_then(|prefix| path.strip_prefix(prefix).ok())
                                 {
                                     (path, false)
-                                } else if let Some(path) = xdg_state_clone
-                                    .as_ref()
-                                    .and_then(|prefix| path.strip_prefix(prefix).ok())
-                                {
-                                    (path, true)
                                 } else {
-                                    return None;
+                                    let path = xdg_state_clone
+                                        .as_ref()
+                                        .and_then(|prefix| path.strip_prefix(prefix).ok())?;
+                                    (path, true)
                                 };
                                 // really only care about keys
                                 if path.starts_with(".atomicwrite") {
@@ -601,15 +594,15 @@ async fn main() -> ExitCode {
                 })
                 .expect("Failed to create notify watcher");
 
-            if let Some(xdg_config) = xdg_config {
-                if let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
-                    log::error!("Failed to watch xdg config dir: {}", err);
-                }
+            if let Some(xdg_config) = xdg_config
+                && let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive)
+            {
+                log::error!("Failed to watch xdg config dir: {}", err);
             }
-            if let Some(xdg_state) = xdg_state {
-                if let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive) {
-                    log::error!("Failed to watch xdg state dir: {}", err);
-                }
+            if let Some(xdg_state) = xdg_state
+                && let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive)
+            {
+                log::error!("Failed to watch xdg state dir: {}", err);
             }
             let watched_configs = Arc::new(RwLock::new(HashMap::new()));
             let watched_states = Arc::new(RwLock::new(HashMap::new()));

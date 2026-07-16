@@ -3,9 +3,8 @@
 
 use std::ffi::c_int;
 
-use crate::{
-    Availability, spa_utils::{array_from_pod, string_from_pod}
-};
+use crate::Availability;
+use crate::spa_utils::{array_from_pod, string_from_pod};
 use libspa::pod::Pod;
 
 #[derive(Clone, Debug, Default)]
@@ -66,19 +65,18 @@ impl Profile {
                         fields.next();
 
                         while let Some((key, value)) = fields.next().zip(fields.next()) {
-                            if let Some("card.profile.devices") = string_from_pod(key).as_deref() {
-                                if let Some(card_profile_devices) =
+                            if let Some("card.profile.devices") = string_from_pod(key).as_deref()
+                                && let Some(card_profile_devices) =
                                     unsafe { array_from_pod::<c_int>(value) }
-                                {
-                                    classes.push(match class_name.as_str() {
-                                        "Audio/Sink" => ProfileClass::AudioSink {
-                                            card_profile_devices,
-                                        },
-                                        _ => ProfileClass::AudioSource {
-                                            card_profile_devices,
-                                        },
-                                    });
-                                }
+                            {
+                                classes.push(match class_name.as_str() {
+                                    "Audio/Sink" => ProfileClass::AudioSink {
+                                        card_profile_devices,
+                                    },
+                                    _ => ProfileClass::AudioSource {
+                                        card_profile_devices,
+                                    },
+                                });
                             }
                         }
                     }
