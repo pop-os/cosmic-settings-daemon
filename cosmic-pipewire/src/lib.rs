@@ -31,6 +31,7 @@ use pipewire::{
     metadata::MetadataListener,
     node::NodeListener,
     proxy::{ProxyListener, ProxyT},
+    registry::{GlobalObject, Registry},
     types::ObjectType,
 };
 use std::time::Duration;
@@ -173,323 +174,305 @@ fn run_service(
             };
 
             match obj.type_ {
-                ObjectType::Device => {
-                    let Ok(device) = registry.bind::<pipewire::device::Device, _>(obj) else {
-                        return;
-                    };
-
-                    device.subscribe_params(&[
-                        ParamType::EnumProfile,
-                        ParamType::Profile,
-                        ParamType::EnumRoute,
-                        ParamType::Route,
-                    ]);
-
-                    let pw_id = device.upcast_ref().id();
-
-                    let listener = device
-                        .add_listener_local()
-                        .info({
-                            let state = Rc::downgrade(&state);
-                            move |info| {
-                                let change_mask = info.change_mask();
-                                if change_mask == DeviceChangeMask::PARAMS {
-                                    if let Some(state) = state.upgrade() {
-                                        let state = state.borrow();
-                                        let Some((_device_id, device, ..)) =
-                                            state.proxies.devices.get(pw_id)
-                                        else {
-                                            return;
-                                        };
-
-                                        device.enum_params(
-                                            1,
-                                            Some(ParamType::EnumRoute),
-                                            0,
-                                            u32::MAX,
-                                        );
-                                        device.enum_params(1, Some(ParamType::Route), 0, u32::MAX);
-                                        device.enum_params(
-                                            1,
-                                            Some(ParamType::EnumProfile),
-                                            0,
-                                            u32::MAX,
-                                        );
-                                        device.enum_params(
-                                            1,
-                                            Some(ParamType::Profile),
-                                            0,
-                                            u32::MAX,
-                                        );
-                                    }
-
-                                    return;
-                                }
-
-                                if let Some(device) = Device::from_device(info) {
-                                    if let Some(state) = state.upgrade() {
-                                        state.borrow_mut().add_device(pw_id, device);
-                                    }
-                                }
-                            }
-                        })
-                        .param({
-                            let state = Rc::downgrade(&state);
-                            move |_seq, param_type, index, _next, param| {
-                                let Some(pod) = param else {
-                                    return;
-                                };
-
-                                let Some(state) = state.upgrade() else {
-                                    return;
-                                };
-
-                                let Some(&(device_id, ..)) =
-                                    state.borrow().proxies.devices.get(pw_id)
-                                else {
-                                    return;
-                                };
-
-                                match param_type {
-                                    ParamType::EnumProfile => {
-                                        if let Some(profile) = Profile::from_pod(pod) {
-                                            state
-                                                .borrow_mut()
-                                                .add_profile(device_id, index, profile);
-                                        }
-                                    }
-
-                                    ParamType::EnumRoute => {
-                                        if let Some(route) = Route::from_pod(pod) {
-                                            state.borrow_mut().add_route(device_id, index, route);
-                                        }
-                                    }
-
-                                    ParamType::Profile => {
-                                        if let Some(profile) = Profile::from_pod(pod) {
-                                            state.borrow_mut().active_profile(device_id, profile);
-                                        }
-                                    }
-
-                                    ParamType::Route => {
-                                        if let Some(route) = Route::from_pod(pod) {
-                                            state
-                                                .borrow_mut()
-                                                .active_route(device_id, index, route);
-                                        }
-                                    }
-
-                                    _ => (),
-                                }
-                            }
-                        })
-                        .register();
-
-                    let proxy = device.upcast_ref();
-
-                    let remove_listener = proxy
-                        .add_listener_local()
-                        .removed({
-                            let state = Rc::downgrade(&state);
-                            move || {
-                                if let Some(state) = state.upgrade() {
-                                    state.borrow_mut().remove_device(pw_id);
-                                }
-                            }
-                        })
-                        .register();
-
-                    state
-                        .borrow_mut()
-                        .proxies
-                        .devices
-                        .insert(pw_id, (0, device, listener, remove_listener));
-                }
-
-                ObjectType::Node => {
-                    let Ok(node) = registry.bind::<pipewire::node::Node, _>(obj) else {
-                        return;
-                    };
-
-                    node.subscribe_params(&[ParamType::Props]);
-
-                    let id = node.upcast_ref().id();
-
-                    let listener = node
-                        .add_listener_local()
-                        .info({
-                            let state = Rc::downgrade(&state);
-                            move |info| {
-                                if let Some(node) = Node::from_node(info)
-                                    && let Some(state) = state.upgrade()
-                                {
-                                    state.borrow_mut().add_node(id, node);
-                                }
-                            }
-                        })
-                        .param({
-                            let state = Rc::downgrade(&state);
-                            move |_seq, param_type, _index, _next, param| {
-                                let Some(pod) = param else {
-                                    return;
-                                };
-
-                                let Some(state) = state.upgrade() else {
-                                    return;
-                                };
-
-                                let Some(&(node_id, ..)) = state.borrow().proxies.nodes.get(id)
-                                else {
-                                    return;
-                                };
-
-                                match param_type {
-                                    ParamType::Props => {
-                                        if let Some(props) = NodeProps::from_pod(pod) {
-                                            state.borrow_mut().set_node_props(node_id, props);
-                                        }
-                                    }
-
-                                    _ => (),
-                                }
-                            }
-                        })
-                        .register();
-
-                    let remove_listener = node
-                        .upcast_ref()
-                        .add_listener_local()
-                        .removed({
-                            let state = Rc::downgrade(&state);
-                            move || {
-                                if let Some(state) = state.upgrade() {
-                                    state.borrow_mut().remove_node(id);
-                                }
-                            }
-                        })
-                        .register();
-
-                    state
-                        .borrow_mut()
-                        .proxies
-                        .nodes
-                        .insert(id, (0, node, listener, remove_listener));
-                }
-
-                ObjectType::Metadata => {
-                    let Some(props) = obj.props else {
-                        return;
-                    };
-
-                    let Some(name) = props.get("metadata.name").map(String::from) else {
-                        return;
-                    };
-
-                    let Ok(metadata) = registry.bind::<pipewire::metadata::Metadata, _>(obj) else {
-                        return;
-                    };
-
-                    let id = metadata.upcast_ref().id();
-
-                    let listener = metadata.add_listener_local();
-                    let listener = match name.as_str() {
-                        "default" => listener
-                            .property({
-                                let state = Rc::downgrade(&state);
-                                move |_subject, key, _type, value| {
-                                    let Some((key, value)) = key.zip(value) else {
-                                        return 0;
-                                    };
-
-                                    match key {
-                                        "default.audio.sink" => {
-                                            tracing::info!(target:"audio-backend", value, "default.audio.sink");
-                                            if let Ok(value) =
-                                                serde_json::de::from_str::<DefaultAudio>(value)
-                                                && let Some(state) = state.upgrade()
-                                            {
-                                                state
-                                                    .borrow_mut()
-                                                    .default_sink(value.name.to_owned())
-                                            }
-                                        }
-
-                                        "default.audio.source" => {
-                                            tracing::info!(target:"audio-backend", value, "default.audio.source");
-                                            if let Ok(value) =
-                                                serde_json::de::from_str::<DefaultAudio>(value)
-                                                && let Some(state) = state.upgrade()
-                                            {
-                                                state
-                                                    .borrow_mut()
-                                                    .default_source(value.name.to_owned())
-                                            }
-                                        }
-
-                                        _ => (),
-                                    }
-
-                                    0
-                                }
-                            })
-                            .register(),
-
-                        "sm-settings" => listener
-                            .property({
-                                let state = Rc::downgrade(&state);
-                                move |_subject, key, _type, value| {
-                                    let Some((key, value)) = key.zip(value) else {
-                                        return 0;
-                                    };
-
-                                    match key {
-                                        "node.features.audio.mono" => {
-                                            if let Ok(value) =
-                                                serde_json::de::from_str::<BooleanProperty>(value)
-                                            {
-                                                if let Some(state) = state.upgrade() {
-                                                    state.borrow_mut().mono_audio(value.value);
-                                                }
-                                            }
-                                        }
-
-                                        _ => (),
-                                    }
-
-                                    0
-                                }
-                            })
-                            .register(),
-
-                        _ => listener.register(),
-                    };
-
-                    let remove_listener = metadata
-                        .upcast_ref()
-                        .add_listener_local()
-                        .removed({
-                            let state = Rc::downgrade(&state);
-                            move || {
-                                if let Some(state) = state.upgrade() {
-                                    state.borrow_mut().remove_metadata(id);
-                                }
-                            }
-                        })
-                        .register();
-
-                    state
-                        .borrow_mut()
-                        .proxies
-                        .metadata
-                        .insert(id, (name, metadata, listener, remove_listener));
-                }
+                ObjectType::Device => bind_device(&registry, obj, state.clone()),
+                ObjectType::Node => bind_node(&registry, obj, state.clone()),
+                ObjectType::Metadata => bind_metadata(&registry, obj, state.clone()),
                 _ => {}
-            };
+            }
         })
         .register();
 
     main_loop.run();
     Ok(())
+}
+
+fn bind_device<P>(registry: &Registry, obj: &GlobalObject<P>, state: Rc<RefCell<State>>)
+where
+    P: AsRef<libspa::utils::dict::DictRef>,
+{
+    let Ok(device) = registry.bind::<pipewire::device::Device, _>(obj) else {
+        return;
+    };
+
+    device.subscribe_params(&[
+        ParamType::EnumProfile,
+        ParamType::Profile,
+        ParamType::EnumRoute,
+        ParamType::Route,
+    ]);
+
+    let pw_id = device.upcast_ref().id();
+
+    let listener = device
+        .add_listener_local()
+        .info({
+            let state = Rc::downgrade(&state);
+            move |info| {
+                let change_mask = info.change_mask();
+                if change_mask == DeviceChangeMask::PARAMS {
+                    if let Some(state) = state.upgrade() {
+                        let state = state.borrow();
+                        let Some((_device_id, device, ..)) = state.proxies.devices.get(pw_id)
+                        else {
+                            return;
+                        };
+
+                        device.enum_params(1, Some(ParamType::EnumRoute), 0, u32::MAX);
+                        device.enum_params(1, Some(ParamType::Route), 0, u32::MAX);
+                        device.enum_params(1, Some(ParamType::EnumProfile), 0, u32::MAX);
+                        device.enum_params(1, Some(ParamType::Profile), 0, u32::MAX);
+                    }
+
+                    return;
+                }
+
+                if let Some(device) = Device::from_device(info)
+                    && let Some(state) = state.upgrade()
+                {
+                    state.borrow_mut().add_device(pw_id, device);
+                }
+            }
+        })
+        .param({
+            let state = Rc::downgrade(&state);
+            move |_seq, param_type, index, _next, param| {
+                let Some(pod) = param else {
+                    return;
+                };
+
+                let Some(state) = state.upgrade() else {
+                    return;
+                };
+
+                let Some(&(device_id, ..)) = state.borrow().proxies.devices.get(pw_id) else {
+                    return;
+                };
+
+                match param_type {
+                    ParamType::EnumProfile => {
+                        if let Some(profile) = Profile::from_pod(pod) {
+                            state.borrow_mut().add_profile(device_id, index, profile);
+                        }
+                    }
+
+                    ParamType::EnumRoute => {
+                        if let Some(route) = Route::from_pod(pod) {
+                            state.borrow_mut().add_route(device_id, index, route);
+                        }
+                    }
+
+                    ParamType::Profile => {
+                        if let Some(profile) = Profile::from_pod(pod) {
+                            state.borrow_mut().active_profile(device_id, profile);
+                        }
+                    }
+
+                    ParamType::Route => {
+                        if let Some(route) = Route::from_pod(pod) {
+                            state.borrow_mut().active_route(device_id, index, route);
+                        }
+                    }
+
+                    _ => (),
+                }
+            }
+        })
+        .register();
+
+    let proxy = device.upcast_ref();
+
+    let remove_listener = proxy
+        .add_listener_local()
+        .removed({
+            let state = Rc::downgrade(&state);
+            move || {
+                if let Some(state) = state.upgrade() {
+                    state.borrow_mut().remove_device(pw_id);
+                }
+            }
+        })
+        .register();
+
+    state
+        .borrow_mut()
+        .proxies
+        .devices
+        .insert(pw_id, (0, device, listener, remove_listener));
+}
+
+fn bind_node<P>(registry: &Registry, obj: &GlobalObject<P>, state: Rc<RefCell<State>>)
+where
+    P: AsRef<libspa::utils::dict::DictRef>,
+{
+    let Ok(node) = registry.bind::<pipewire::node::Node, _>(obj) else {
+        return;
+    };
+
+    node.subscribe_params(&[ParamType::Props]);
+
+    let id = node.upcast_ref().id();
+
+    let listener = node
+        .add_listener_local()
+        .info({
+            let state = Rc::downgrade(&state);
+            move |info| {
+                if let Some(node) = Node::from_node(info)
+                    && let Some(state) = state.upgrade()
+                {
+                    state.borrow_mut().add_node(id, node);
+                }
+            }
+        })
+        .param({
+            let state = Rc::downgrade(&state);
+            move |_seq, param_type, _index, _next, param| {
+                let Some(pod) = param else {
+                    return;
+                };
+
+                let Some(state) = state.upgrade() else {
+                    return;
+                };
+
+                let Some(&(node_id, ..)) = state.borrow().proxies.nodes.get(id) else {
+                    return;
+                };
+
+                match param_type {
+                    ParamType::Props => {
+                        if let Some(props) = NodeProps::from_pod(pod) {
+                            state.borrow_mut().set_node_props(node_id, props);
+                        }
+                    }
+
+                    _ => (),
+                }
+            }
+        })
+        .register();
+
+    let remove_listener = node
+        .upcast_ref()
+        .add_listener_local()
+        .removed({
+            let state = Rc::downgrade(&state);
+            move || {
+                if let Some(state) = state.upgrade() {
+                    state.borrow_mut().remove_node(id);
+                }
+            }
+        })
+        .register();
+
+    state
+        .borrow_mut()
+        .proxies
+        .nodes
+        .insert(id, (0, node, listener, remove_listener));
+}
+
+fn bind_metadata<P>(registry: &Registry, obj: &GlobalObject<P>, state: Rc<RefCell<State>>)
+where
+    P: AsRef<libspa::utils::dict::DictRef>,
+{
+    let Some(props) = &obj.props else {
+        return;
+    };
+
+    let Some(name) = props.as_ref().get("metadata.name").map(String::from) else {
+        return;
+    };
+
+    let Ok(metadata) = registry.bind::<pipewire::metadata::Metadata, _>(obj) else {
+        return;
+    };
+
+    let id = metadata.upcast_ref().id();
+
+    let listener = metadata.add_listener_local();
+    let listener = match name.as_str() {
+        "default" => listener
+            .property({
+                let state = Rc::downgrade(&state);
+                move |_subject, key, _type, value| {
+                    let Some((key, value)) = key.zip(value) else {
+                        return 0;
+                    };
+
+                    match key {
+                        "default.audio.sink" => {
+                            tracing::info!(target:"audio-backend", value, "default.audio.sink");
+                            if let Ok(value) = serde_json::de::from_str::<DefaultAudio>(value)
+                                && let Some(state) = state.upgrade()
+                            {
+                                state.borrow_mut().default_sink(value.name.to_owned())
+                            }
+                        }
+
+                        "default.audio.source" => {
+                            tracing::info!(target:"audio-backend", value, "default.audio.source");
+                            if let Ok(value) = serde_json::de::from_str::<DefaultAudio>(value)
+                                && let Some(state) = state.upgrade()
+                            {
+                                state.borrow_mut().default_source(value.name.to_owned())
+                            }
+                        }
+
+                        _ => (),
+                    }
+
+                    0
+                }
+            })
+            .register(),
+
+        "sm-settings" => listener
+            .property({
+                let state = Rc::downgrade(&state);
+                move |_subject, key, _type, value| {
+                    let Some((key, value)) = key.zip(value) else {
+                        return 0;
+                    };
+
+                    match key {
+                        "node.features.audio.mono" => {
+                            if let Ok(value) = serde_json::de::from_str::<BooleanProperty>(value) {
+                                if let Some(state) = state.upgrade() {
+                                    state.borrow_mut().mono_audio(value.value);
+                                }
+                            }
+                        }
+
+                        _ => (),
+                    }
+
+                    0
+                }
+            })
+            .register(),
+
+        _ => listener.register(),
+    };
+
+    let remove_listener = metadata
+        .upcast_ref()
+        .add_listener_local()
+        .removed({
+            let state = Rc::downgrade(&state);
+            move || {
+                if let Some(state) = state.upgrade() {
+                    state.borrow_mut().remove_metadata(id);
+                }
+            }
+        })
+        .register();
+
+    state
+        .borrow_mut()
+        .proxies
+        .metadata
+        .insert(id, (name, metadata, listener, remove_listener));
 }
 
 /// Response from pipewire
