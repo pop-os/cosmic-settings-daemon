@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use crate::backend::*;
-use std::{
-    sync::{Arc, Mutex}, time::Duration
-};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 #[derive(Clone)]

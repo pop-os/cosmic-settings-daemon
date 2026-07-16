@@ -1,9 +1,10 @@
 use ddc_hi::{Ddc, Display};
+use std::error::Error;
+use std::io;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
-use std::{error::Error, io, str::FromStr, time::Duration};
-use tokio::fs;
-use tokio::time;
+use std::time::{Duration, Instant};
+use tokio::{fs, time};
 
 use crate::LogindSessionProxy;
 
@@ -82,7 +83,7 @@ impl BrightnessDevice {
     }
 
     pub async fn new(subsystem: &'static str, sysname: String) -> io::Result<Self> {
-        let path = format!("/sys/class/{}/{}/max_brightness", subsystem, &sysname);
+        let path = format!("/sys/class/{}/{}/max_brightness", subsystem, sysname);
         let value = fs::read_to_string(&path).await?;
         let max_brightness = u32::from_str(value.trim()).map_err(invalid_data)?;
         let mut external = Self::external();
@@ -105,10 +106,10 @@ impl BrightnessDevice {
                 if d.update_capabilities().is_err() {
                     continue;
                 }
-                if let Some(feature) = d.info.mccs_database.get(BRIGHTNESS) {
-                    if let Ok(value) = d.handle.get_vcp_feature(feature.code) {
-                        return Ok(value.value() as u32);
-                    }
+                if let Some(feature) = d.info.mccs_database.get(BRIGHTNESS)
+                    && let Ok(value) = d.handle.get_vcp_feature(feature.code)
+                {
+                    return Ok(value.value() as u32);
                 }
             }
         }
@@ -216,10 +217,7 @@ impl BrightnessDevice {
     ) -> zbus::Result<()> {
         // Never set 0 on LCD backlights unless the device is clearly coarse (<=20 levels).
         // Keyboard LEDs and other subsystems can still use 0.
-        let clamped = value.clamp(
-            self.min_brightness(),
-            self.max_brightness.unwrap_or(100) as u32,
-        );
+        let clamped = value.clamp(self.min_brightness(), self.max_brightness.unwrap_or(100));
 
         let b_dcc = (clamped * 100 / self.max_brightness.unwrap_or(100)) as u16;
         {

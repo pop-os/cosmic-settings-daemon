@@ -10,7 +10,9 @@
 
 use cosmic_settings_audio_core as audio;
 use cosmic_settings_audio_server as audio_server;
-use std::{os::fd::OwnedFd, path::PathBuf, sync::Arc};
+use std::os::fd::OwnedFd;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub async fn init() -> (Daemon, impl Future<Output = ()> + 'static + Send) {

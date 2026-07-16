@@ -1,7 +1,7 @@
 use geonames::GeoPosition;
-use std::{
-    collections::BTreeMap, fs, io::{self, BufRead}
-};
+use std::collections::BTreeMap;
+use std::fs;
+use std::io::{self, BufRead};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -29,11 +29,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let line = line_res?;
         let mut parts = line.split('\t');
         let Some(_id) = parts.next() else { continue };
-        let Some(name) = parts.next() else { continue };
+        let Some(_name) = parts.next() else { continue };
         let Some(_ascii_name) = parts.next() else {
             continue;
         };
-        let Some(alternate_names) = parts.next() else {
+        let Some(_alternate_names) = parts.next() else {
             continue;
         };
         let Some(latitude) = parts.next() else {
@@ -95,9 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut timezone_positions = BTreeMap::new();
     for (_, timezone, geoposition) in sorted_data {
-        if !timezone_positions.contains_key(&timezone) {
-            timezone_positions.insert(timezone, geoposition);
-        }
+        timezone_positions.entry(timezone).or_insert(geoposition);
     }
 
     for (timezone, geoposition) in &timezone_positions {

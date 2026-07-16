@@ -1,7 +1,9 @@
-use cosmic_config::{Config, CosmicConfigEntry, cosmic_config_derive::CosmicConfigEntry};
+use cosmic_config::cosmic_config_derive::CosmicConfigEntry;
+use cosmic_config::{Config, CosmicConfigEntry};
 use cosmic_theme::{CosmicPalette, Theme, ThemeBuilder};
 use serde::{Deserialize, Serialize};
-use std::{option_env, path::PathBuf};
+use std::option_env;
+use std::path::PathBuf;
 
 pub const GREETER_STATE: Option<&'static str> = option_env!("GREETER_STATE");
 

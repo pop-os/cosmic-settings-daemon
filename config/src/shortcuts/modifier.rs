@@ -70,15 +70,15 @@ impl std::ops::BitOr for Modifier {
     }
 }
 
-impl Into<Modifiers> for Modifier {
-    fn into(self) -> Modifiers {
+impl From<Modifier> for Modifiers {
+    fn from(src: Modifier) -> Self {
         let mut modifiers = Modifiers {
             ctrl: false,
             alt: false,
             shift: false,
             logo: false,
         };
-        modifiers += self;
+        modifiers += src;
         modifiers
     }
 }

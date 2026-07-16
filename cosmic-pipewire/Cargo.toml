@@ -15,5 +15,3 @@ pipewire = "0.10.0"
 serde = { version = "1.0.228", features = ["derive"]}
 serde_json = "1.0.149"
 tracing = "0.1.44"
-
-[features]

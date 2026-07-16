@@ -1,9 +1,11 @@
 // Copyright 2025 System76 <info@system76.com>
 // SPDX-License-Identifier: MPL-2.0
 
-use crate::{Channel, spa_utils::array_from_pod};
+use crate::Channel;
+use crate::spa_utils::array_from_pod;
 use float_cmp::{ApproxEq, F32Margin};
-use libspa::{pod::Pod, utils::Id};
+use libspa::pod::Pod;
+use libspa::utils::Id;
 use pipewire::node::{NodeInfoRef, NodeState};
 use std::ffi::c_float;
 

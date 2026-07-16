@@ -75,10 +75,10 @@ impl Binding {
                     };
 
                     // Try case-sensitive lookup first in case of two symbols that only differ in case.
-                    match xkb::keysym_from_name(&name, xkb::KEYSYM_NO_FLAGS) {
+                    match xkb::keysym_from_name(name, xkb::KEYSYM_NO_FLAGS) {
                         x if x.raw() == super::sym::NO_SYMBOL => {
                             // Fallback to case insensitive lookup.
-                            match xkb::keysym_from_name(&name, xkb::KEYSYM_CASE_INSENSITIVE) {
+                            match xkb::keysym_from_name(name, xkb::KEYSYM_CASE_INSENSITIVE) {
                                 x_insensitive if x_insensitive.raw() == super::sym::NO_SYMBOL => {
                                     return Err(format!("'{name}' is not a valid key symbol"));
                                 }
@@ -212,7 +212,7 @@ impl FromStr for Binding {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let binding = Binding::from_str_partial(value)?;
         if binding.key.is_none() && !binding.is_modifier_only() {
-            return Err(format!("no key was defined for this binding"));
+            return Err("no key was defined for this binding".to_string());
         }
 
         Ok(binding)
@@ -292,13 +292,13 @@ mod tests {
         assert!(Binding::from_str("Caps_Lock").unwrap().is_set());
 
         // A single modifier other than Super is not a complete binding.
-        assert!(matches!(Binding::from_str("Shift"), Err(_)));
+        assert!(Binding::from_str("Shift").is_err());
 
         // Can't have multiple non-modifier keys.
-        assert!(matches!(Binding::from_str("Super+Up+Down"), Err(_)));
+        assert!(Binding::from_str("Super+Up+Down").is_err());
 
         // At least one key is required.
-        assert!(matches!(Binding::from_str(" "), Err(_)));
+        assert!(Binding::from_str(" ").is_err());
     }
 
     #[test]
@@ -310,10 +310,10 @@ mod tests {
         );
 
         // Can't have multiple non-modifier keys.
-        assert!(matches!(Binding::from_str("Super+Up+Down"), Err(_)));
+        assert!(Binding::from_str("Super+Up+Down").is_err());
 
         // At least one key is required.
-        assert!(matches!(Binding::from_str(" "), Err(_)));
+        assert!(Binding::from_str(" ").is_err());
     }
 
     #[test]
