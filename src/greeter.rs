@@ -17,10 +17,10 @@ pub fn sync_with_greeter() -> anyhow::Result<()> {
         }
     };
 
-    if let Some(hc) = state.high_contrast {
-        if let Err(err) = greeter::apply_hc_theme(hc) {
-            log::error!("Failed to apply high contrast changes from the greeter: {err:?}");
-        }
+    if let Some(hc) = state.high_contrast
+        && let Err(err) = greeter::apply_hc_theme(hc)
+    {
+        log::error!("Failed to apply high contrast changes from the greeter: {err:?}");
     }
 
     if let Some(screen_reader) = state.screen_reader {
@@ -34,11 +34,11 @@ pub fn sync_with_greeter() -> anyhow::Result<()> {
                         continue;
                     }
                 };
-                if let Ok(proxy) = StatusProxy::new(&conn).await {
-                    if let Err(err) = proxy.set_screen_reader_enabled(screen_reader).await {
-                        log::error!("Failed to apply screen reader status. {err:?}");
-                        continue;
-                    }
+                if let Ok(proxy) = StatusProxy::new(&conn).await
+                    && let Err(err) = proxy.set_screen_reader_enabled(screen_reader).await
+                {
+                    log::error!("Failed to apply screen reader status. {err:?}");
+                    continue;
                 }
                 break;
             }

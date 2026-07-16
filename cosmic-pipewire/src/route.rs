@@ -3,10 +3,10 @@
 
 use std::ffi::{c_float, c_int};
 
-use crate::{
-    Availability, Channel, Direction, spa_utils::{array_from_pod, string_from_pod}
-};
-use libspa::{pod::Pod, utils::Id};
+use crate::spa_utils::{array_from_pod, string_from_pod};
+use crate::{Availability, Channel, Direction};
+use libspa::pod::Pod;
+use libspa::utils::Id;
 
 #[derive(Clone, Debug, Default)]
 pub struct Route {
@@ -102,10 +102,10 @@ impl Route {
                                     }
                                 }
                                 Some("card.profile.port") => {
-                                    if let Some(value) = string_from_pod(value) {
-                                        if let Ok(value) = value.parse::<i32>() {
-                                            this.card_profile_port = value;
-                                        }
+                                    if let Some(value) = string_from_pod(value)
+                                        && let Ok(value) = value.parse::<i32>()
+                                    {
+                                        this.card_profile_port = value;
                                     }
                                 }
                                 Some("device.icon-name") => {
