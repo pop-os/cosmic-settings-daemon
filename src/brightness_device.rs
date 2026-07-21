@@ -3,7 +3,7 @@ use std::error::Error;
 use std::io;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::{fs, time};
 
 use crate::LogindSessionProxy;
@@ -35,33 +35,47 @@ impl BrightnessDevice {
         let v: Arc<(Mutex<Option<u16>>, std::sync::Condvar)> =
             Arc::new((Mutex::new(Some(100u16)), std::sync::Condvar::new()));
         let brightness_dcc = v.clone();
-        let mut displays = Display::enumerate();
-        let displays_empty = displays.is_empty();
+        let displays_empty = Display::enumerate().is_empty();
 
         std::thread::spawn(move || {
-            let mut cur = 100;
-            let mut last_change = Instant::now();
-            loop {
-                let v = v.clone();
-                let mut guard = v.0.lock().unwrap();
-                while guard.is_some_and(|v| v == cur) {
-                    guard = v.1.wait(guard).unwrap();
-                }
+            // How long cached DDC display handles are kept after the last
+            // brightness change. Each handle is an open fd on a /dev/i2c-*
+            // adapter; holding them indefinitely blocks the kernel's DP-MST
+            // teardown on monitor unplug, permanently wedging drm_dp_mst_wq
+            // (https://github.com/pop-os/cosmic-settings-daemon/issues/165).
+            // The cache still avoids re-enumeration during a burst of
+            // brightness key repeats.
+            const IDLE_TIMEOUT: Duration = Duration::from_secs(2);
 
-                let Some(brightness) = *guard else {
-                    break;
+            let mut displays: Vec<Display> = Vec::new();
+            let mut cur = 100;
+            'outer: loop {
+                let brightness = {
+                    let mut guard = v.0.lock().unwrap();
+                    loop {
+                        match *guard {
+                            None => break 'outer,
+                            Some(b) if b != cur => break b,
+                            Some(_) => {}
+                        }
+                        if displays.is_empty() {
+                            guard = v.1.wait(guard).unwrap();
+                        } else {
+                            let (g, res) = v.1.wait_timeout(guard, IDLE_TIMEOUT).unwrap();
+                            guard = g;
+                            if res.timed_out() {
+                                // Idle: release the i2c fds so unplugged
+                                // displays can be torn down by the kernel.
+                                displays.clear();
+                            }
+                        }
+                    }
                 };
-                drop(guard);
 
                 cur = brightness;
-                let now = Instant::now();
-                if now.checked_duration_since(last_change).unwrap_or_default()
-                    > Duration::from_secs(10)
-                {
-                    // pull in latest case anything has changed...
+                if displays.is_empty() {
                     displays = Display::enumerate();
                 }
-                last_change = now;
                 for display in &mut displays {
                     if display.update_capabilities().is_err() {
                         continue;
