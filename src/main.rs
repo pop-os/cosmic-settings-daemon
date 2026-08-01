@@ -198,6 +198,10 @@ impl SettingsDaemon {
             let max = self.display_brightness_device.max_brightness();
             let min = self.display_brightness_device.min_brightness() as i32;
 
+            if min > max {
+                return;
+            }
+
             let clamped = value.clamp(min, max);
             _ = self
                 .display_brightness_device
