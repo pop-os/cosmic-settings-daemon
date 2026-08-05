@@ -3,7 +3,7 @@
 // when the theme is set to auto-export color palette, write to gtk3 / gtk4 / kde / ... css files
 // read config file for lat/long
 
-use std::path::Path;
+use std::{fs, path::Path};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::bail;
@@ -32,6 +32,54 @@ pub enum ThemeMsg {
     /// true if dark
     Theme(bool),
     Tk(String),
+}
+
+fn ensure_theme_v2_list_button_fallback(theme_id: &str) {
+    let Some(config_root) = dirs::config_dir()
+        .map(|x| x.join("cosmic"))
+        .or_else(|| dirs::home_dir().map(|p| p.join(".config/cosmic")))
+    else {
+        return;
+    };
+
+    let local_theme_dir = config_root.join(theme_id).join("v2");
+    let local_list_button = local_theme_dir.join("list_button");
+    if local_list_button.exists() {
+        return;
+    }
+
+    let system_theme_dir = Path::new("/usr/share/cosmic").join(theme_id).join("v2");
+    let system_list_button = system_theme_dir.join("list_button");
+    if system_list_button.exists() {
+        return;
+    }
+
+    let local_button = local_theme_dir.join("button");
+    let system_button = system_theme_dir.join("button");
+    let source = if local_button.exists() {
+        local_button
+    } else if system_button.exists() {
+        system_button
+    } else {
+        log::warn!(
+            "Theme {theme_id} is missing v2/list_button and no compatible button fallback exists"
+        );
+        return;
+    };
+
+    if let Err(err) = fs::create_dir_all(&local_theme_dir) {
+        log::warn!(
+            "Failed to create theme fallback directory for {theme_id}: {err}"
+        );
+        return;
+    }
+
+    if let Err(err) = fs::copy(&source, &local_list_button) {
+        log::warn!(
+            "Failed to create v2/list_button fallback for {theme_id} from {}: {err}",
+            source.display()
+        );
+    }
 }
 
 impl SunriseSunset {
@@ -158,6 +206,9 @@ pub async fn watch_theme(
 
     set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
     set_gnome_icon_theme(tk.icon_theme.clone());
+
+    ensure_theme_v2_list_button_fallback(cosmic_theme::DARK_THEME_ID);
+    ensure_theme_v2_list_button_fallback(cosmic_theme::LIGHT_THEME_ID);
 
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
