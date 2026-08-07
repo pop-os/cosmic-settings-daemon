@@ -145,4 +145,11 @@ pub trait CosmicAudioProxy {
         node_id: u32,
         balance: Option<f32>,
     ) -> zlink::Result<Result<Volume, Error>>;
+
+    /// Move a playback stream to an audio sink.
+    async fn set_playback_sink(
+        &mut self,
+        playback_id: u32,
+        sink_id: u32,
+    ) -> zlink::Result<Result<(), Error>>;
 }

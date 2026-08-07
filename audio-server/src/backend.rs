@@ -70,8 +70,19 @@ pub struct Model {
     pub node_volumes: IntMap<NodeId, (u32, Option<f32>)>,
     /// Node IDs for sinks
     sink_node_ids: Vec<NodeId>,
+    /// PipeWire object serials for sink nodes.
+    pub sink_node_serials: IntMap<NodeId, u64>,
     /// Node IDs for sources
     source_node_ids: Vec<NodeId>,
+
+    /** Playback stream information */
+
+    /// Information about playback streams shared with subscribed varlink clients.
+    pub playback_info: IntMap<NodeId, cosmic_settings_audio_core::PlaybackInfo>,
+    /// Raw PipeWire `target.object` values for playback streams.
+    playback_targets: IntMap<NodeId, String>,
+    /// Resolved sink node IDs for playback streams with explicit targets.
+    playback_sink_ids: IntMap<NodeId, NodeId>,
 
     /** Device object information */
 
@@ -176,7 +187,11 @@ impl Model {
             node_mute: Default::default(),
             node_volumes: Default::default(),
             sink_node_ids: Default::default(),
+            sink_node_serials: Default::default(),
             source_node_ids: Default::default(),
+            playback_info: Default::default(),
+            playback_targets: Default::default(),
+            playback_sink_ids: Default::default(),
             device_info: Default::default(),
             device_profiles: Default::default(),
             active_profiles: Default::default(),
@@ -457,6 +472,8 @@ impl Model {
 
                 let devices = self.device_info.clone();
                 let nodes = self.node_info.clone();
+                let playback = self.playback_info.clone();
+                let playback_sinks = self.playback_sink_ids.clone();
                 let profiles = self.device_profiles.clone();
                 let routes = self.device_routes.clone();
                 let active_profiles = self.active_profiles.clone();
@@ -512,6 +529,14 @@ impl Model {
                                 .into_iter()
                                 .map(|(node_id, node)| Event::Node(node_id, node)),
                         )
+                        .chain(
+                            playback
+                                .into_iter()
+                                .map(|(node_id, info)| Event::Playback(node_id, info)),
+                        )
+                        .chain(playback_sinks.into_iter().map(|(playback_id, sink_id)| {
+                            Event::PlaybackTarget(playback_id, Some(sink_id))
+                        }))
                         .chain(default_sink.into_iter().map(Event::DefaultSink))
                         .chain(default_source.into_iter().map(Event::DefaultSource))
                         .chain(
@@ -955,12 +980,16 @@ impl Model {
                     is_sink: matches!(node.media_class, pipewire::MediaClass::Sink),
                 };
 
-                self.emit_event(Event::Node(node.object_id, info.clone()))
-                    .await;
-
                 match node.media_class {
                     pipewire::MediaClass::Sink => {
                         self.sink_node_ids.push(node.object_id);
+                        self.sink_node_serials
+                            .insert(node.object_id, node.object_serial);
+
+                        let playback_ids = self.playback_targets.keys().collect::<Vec<_>>();
+                        for playback_id in playback_ids {
+                            self.refresh_playback_target(playback_id, false).await;
+                        }
 
                         // Set the sink as the default if it matches the server.
                         if self.active_sink_node_name == node.node_name {
@@ -998,11 +1027,39 @@ impl Model {
                             }
                         }
                     }
+
+                    pipewire::MediaClass::Playback => {
+                        let Some(playback) = node.playback else {
+                            tracing::warn!(
+                                target: "audio-backend",
+                                node_id = node.object_id,
+                                "playback node missing playback metadata"
+                            );
+                            return;
+                        };
+
+                        let info = cosmic_settings_audio_core::PlaybackInfo {
+                            application_id: playback.application_id,
+                            application_name: playback.application_name,
+                            icon_name: playback.icon_name,
+                            media_name: playback.media_name,
+                            node_name: node.node_name,
+                        };
+
+                        self.playback_info.insert(node.object_id, info.clone());
+                        self.emit_event(Event::Playback(node.object_id, info)).await;
+                        self.refresh_playback_target(node.object_id, true).await;
+                    }
                 }
 
-                self.node_info.insert(node.object_id, info.clone());
                 self.node_volumes.entry(node.object_id).or_insert((0, None));
                 self.node_mute.entry(node.object_id).or_insert(true);
+
+                // Playback streams have their own dedicated event.
+                if !matches!(node.media_class, pipewire::MediaClass::Playback) {
+                    self.node_info.insert(node.object_id, info.clone());
+                    self.emit_event(Event::Node(node.object_id, info)).await;
+                }
             }
 
             pipewire::Event::MonoAudio(enabled) => {
@@ -1023,6 +1080,18 @@ impl Model {
                         .status()
                         .await;
                 });
+            }
+
+            pipewire::Event::PlaybackTarget(id, target) => {
+                match target {
+                    Some(target) => {
+                        self.playback_targets.insert(id, target);
+                    }
+                    None => {
+                        self.playback_targets.remove(id);
+                    }
+                }
+                self.refresh_playback_target(id, true).await;
             }
 
             pipewire::Event::DefaultSink(node_name) => {
@@ -1072,6 +1141,39 @@ impl Model {
         })
     }
 
+    async fn refresh_playback_target(&mut self, playback_id: NodeId, force: bool) {
+        if !self.playback_info.contains_key(playback_id) {
+            return;
+        }
+
+        let sink_id = self.playback_targets.get(playback_id).and_then(|target| {
+            if let Ok(serial) = target.parse::<u64>() {
+                self.sink_node_serials
+                    .iter()
+                    .find_map(|(id, value)| (*value == serial).then_some(id))
+            } else {
+                self.node_info
+                    .iter()
+                    .find_map(|(id, node)| (node.is_sink && node.name == *target).then_some(id))
+            }
+        });
+        let previous = self.playback_sink_ids.get(playback_id).copied();
+
+        match sink_id {
+            Some(sink_id) => {
+                self.playback_sink_ids.insert(playback_id, sink_id);
+            }
+            None => {
+                self.playback_sink_ids.remove(playback_id);
+            }
+        }
+
+        if force || previous != sink_id {
+            self.emit_event(Event::PlaybackTarget(playback_id, sink_id))
+                .await;
+        }
+    }
+
     async fn remove_device(&mut self, id: DeviceId) {
         tracing::debug!(target: "audio-backend", "Device {id} removed");
         _ = self.device_headset_check.remove(id);
@@ -1105,6 +1207,19 @@ impl Model {
         }
 
         _ = self.node_info.remove(id);
+        _ = self.playback_info.remove(id);
+        _ = self.playback_targets.remove(id);
+        _ = self.playback_sink_ids.remove(id);
+        _ = self.sink_node_serials.remove(id);
+
+        let affected_playback = self
+            .playback_sink_ids
+            .iter()
+            .filter_map(|(playback_id, sink_id)| (*sink_id == id).then_some(playback_id))
+            .collect::<Vec<_>>();
+        for playback_id in affected_playback {
+            self.refresh_playback_target(playback_id, false).await;
+        }
         _ = self.node_devices.remove(id);
         _ = self.node_mute.remove(id);
 

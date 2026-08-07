@@ -11,6 +11,8 @@ pub enum Error {
     ChannelSend,
     NoActiveSink,
     NoActiveSource,
+    InvalidPlayback,
+    InvalidSink,
 }
 
 impl std::fmt::Display for Error {
@@ -20,6 +22,8 @@ impl std::fmt::Display for Error {
             Error::ChannelSend => f.write_str("internal error: channel send failed"),
             Error::NoActiveSink => f.write_str("no active sink device to apply operation to"),
             Error::NoActiveSource => f.write_str("no active source to apply operation to"),
+            Error::InvalidPlayback => f.write_str("node is not an audio playback stream"),
+            Error::InvalidSink => f.write_str("node is not an audio sink"),
         }
     }
 }
@@ -102,6 +106,10 @@ pub enum Event {
     MonoAudio(bool),
     /// Add a node
     Node(u32, NodeInfo),
+    /// Add an audio playback stream.
+    Playback(u32, PlaybackInfo),
+    /// The sink explicitly targeted by a playback stream, or `None` to follow the default sink.
+    PlaybackTarget(u32, Option<u32>),
     /// Mute status of a node changed.
     NodeMute(u32, bool),
     /// Volume of a node changed.
@@ -150,7 +158,23 @@ impl From<EventV1> for Event {
 #[allow(deprecated)]
 impl From<Event> for EventV1 {
     fn from(event: Event) -> Self {
-        convert_event!(event, Event, EventV1)
+        match event {
+            Event::ActiveProfile(id, info) => Self::ActiveProfile(id, info),
+            Event::ActiveRoute(id, index, info) => Self::ActiveRoute(id, index, info),
+            Event::DefaultSink(id) => Self::DefaultSink(id),
+            Event::DefaultSource(id) => Self::DefaultSource(id),
+            Event::Device(id, info) => Self::Device(id, info),
+            Event::MonoAudio(enabled) => Self::MonoAudio(enabled),
+            Event::Node(id, info) => Self::Node(id, info),
+            Event::Playback(..) | Event::PlaybackTarget(..) => Self::Unknown,
+            Event::NodeMute(id, mute) => Self::NodeMute(id, mute),
+            Event::NodeVolume(id, volume, balance) => Self::NodeVolume(id, volume, balance),
+            Event::Profile(id, index, info) => Self::Profile(id, index, info),
+            Event::Route(id, index, info) => Self::Route(id, index, info),
+            Event::RemoveDevice(id) => Self::RemoveDevice(id),
+            Event::RemoveNode(id) => Self::RemoveNode(id),
+            Event::Unknown => Self::Unknown,
+        }
     }
 }
 
@@ -201,6 +225,15 @@ pub struct NodeInfo {
     pub device_id: Option<u32>,
     pub card_profile_device: Option<u32>,
     pub is_sink: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaybackInfo {
+    pub application_id: Option<String>,
+    pub application_name: Option<String>,
+    pub icon_name: Option<String>,
+    pub media_name: Option<String>,
+    pub node_name: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

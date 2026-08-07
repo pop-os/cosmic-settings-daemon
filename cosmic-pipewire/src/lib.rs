@@ -8,7 +8,7 @@ pub use device::Device;
 
 pub mod node;
 use intmap::IntMap;
-pub use node::{MediaClass, Node, NodeProps};
+pub use node::{MediaClass, Node, NodeProps, PlaybackInfo};
 
 mod profile;
 pub use profile::{Profile, ProfileClass};
@@ -393,13 +393,16 @@ where
         "default" => listener
             .property({
                 let state = Rc::downgrade(&state);
-                move |_subject, key, _type, value| {
-                    let Some((key, value)) = key.zip(value) else {
+                move |subject, key, _type, value| {
+                    let Some(key) = key else {
                         return 0;
                     };
 
                     match key {
                         "default.audio.sink" => {
+                            let Some(value) = value else {
+                                return 0;
+                            };
                             tracing::info!(target:"audio-backend", value, "default.audio.sink");
                             if let Ok(value) = serde_json::de::from_str::<DefaultAudio>(value)
                                 && let Some(state) = state.upgrade()
@@ -409,11 +412,22 @@ where
                         }
 
                         "default.audio.source" => {
+                            let Some(value) = value else {
+                                return 0;
+                            };
                             tracing::info!(target:"audio-backend", value, "default.audio.source");
                             if let Ok(value) = serde_json::de::from_str::<DefaultAudio>(value)
                                 && let Some(state) = state.upgrade()
                             {
                                 state.borrow_mut().default_source(value.name.to_owned())
+                            }
+                        }
+
+                        "target.object" => {
+                            if let Some(state) = state.upgrade() {
+                                state
+                                    .borrow_mut()
+                                    .playback_target(subject, value.map(ToOwned::to_owned));
                             }
                         }
 
@@ -494,6 +508,8 @@ pub enum Event {
     DefaultSource(String),
     /// Mono audio node setting changed.
     MonoAudio(bool),
+    /// A playback stream's explicit target object changed.
+    PlaybackTarget(NodeId, Option<String>),
     /// Emitted when the properties of a node has changed.
     NodeProperties(NodeId, NodeProps),
     /// A device with the given device_id was removed.
@@ -717,6 +733,10 @@ impl State {
 
     fn mono_audio(&mut self, enabled: bool) {
         self.on_event(Event::MonoAudio(enabled))
+    }
+
+    fn playback_target(&mut self, id: NodeId, target: Option<String>) {
+        self.on_event(Event::PlaybackTarget(id, target))
     }
 
     fn on_event(&mut self, event: Event) {
