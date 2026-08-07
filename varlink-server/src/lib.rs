@@ -324,6 +324,23 @@ where
             .set_node_volume_balance(node_id, balance)
             .await
     }
+
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetPlaybackSink"
+    )]
+    pub async fn audio_set_playback_sink(
+        &mut self,
+        playback_id: u32,
+        sink_id: u32,
+    ) -> Result<(), audio::Error> {
+        self.0
+            .lock()
+            .await
+            .audio_server
+            .set_playback_sink(playback_id, sink_id)
+            .await
+    }
 }
 
 pub struct DaemonInner {

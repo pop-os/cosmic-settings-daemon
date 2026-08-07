@@ -14,6 +14,7 @@ use std::ffi::c_float;
 #[derive(Clone, Debug)]
 pub struct Node {
     pub object_id: u32,
+    pub object_serial: u64,
     pub audio_channels: u32,
     pub audio_position: String,
     pub card_profile_device: Option<u32>,
@@ -24,7 +25,16 @@ pub struct Node {
     pub icon_name: String,
     pub media_class: MediaClass,
     pub node_name: String,
+    pub playback: Option<PlaybackInfo>,
     pub state: State,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlaybackInfo {
+    pub application_id: Option<String>,
+    pub application_name: Option<String>,
+    pub icon_name: Option<String>,
+    pub media_name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,6 +50,7 @@ pub enum State {
 pub enum MediaClass {
     Source,
     Sink,
+    Playback,
 }
 
 impl Node {
@@ -50,26 +61,35 @@ impl Node {
 
         let mut audio_channels = 1;
         let mut audio_position = String::new();
+        let mut application_id = None;
+        let mut application_name = None;
+        let mut application_icon_name = None;
         let mut card_profile_device = None;
         let mut device_id = None;
         let mut device_profile_description: &str = "";
         let mut device_profile_pro = false;
         let mut icon_name = String::new();
         let mut media_class = None;
+        let mut media_name = None;
         let mut node_description: &str = "";
         let mut node_name = String::new();
         let mut object_id = None;
+        let mut object_serial = None;
 
         for (entry, value) in props.iter() {
             match entry {
                 "device.id" => device_id = value.parse::<u32>().ok(),
                 "object.id" => object_id = Some(value.parse::<u32>().ok()?),
+                "object.serial" => object_serial = Some(value.parse::<u64>().ok()?),
 
                 // 2
                 "audio.channels" => audio_channels = value.parse::<u32>().unwrap_or(1),
 
                 // FL,FR
                 "audio.position" => audio_position = value.to_owned(),
+                "application.id" => application_id = Some(value.to_owned()),
+                "application.name" => application_name = Some(value.to_owned()),
+                "application.icon-name" => application_icon_name = Some(value.to_owned()),
 
                 // 0
                 "card.profile.device" => card_profile_device = Some(value.parse::<u32>().ok()?),
@@ -89,9 +109,11 @@ impl Node {
                     media_class = Some(match value {
                         "Audio/Sink" => MediaClass::Sink,
                         "Audio/Source" => MediaClass::Source,
+                        "Stream/Output/Audio" => MediaClass::Playback,
                         _ => return None,
                     })
                 }
+                "media.name" => media_name = Some(value.to_owned()),
 
                 // alsa_input.pci-0000_66_00.6.analog-stereo
                 "node.name" => node_name = value.to_owned(),
@@ -103,11 +125,20 @@ impl Node {
             }
         }
 
+        let media_class = media_class?;
+        let playback = matches!(media_class, MediaClass::Playback).then_some(PlaybackInfo {
+            application_id,
+            application_name,
+            icon_name: application_icon_name,
+            media_name,
+        });
+
         let device = Node {
             object_id: object_id?,
+            object_serial: object_serial?,
             device_id,
             card_profile_device,
-            media_class: media_class?,
+            media_class,
             description: if device_profile_description.is_empty() {
                 node_description.to_owned()
             } else {
@@ -123,6 +154,7 @@ impl Node {
             audio_channels,
             audio_position,
             node_name,
+            playback,
             state: match info.state() {
                 NodeState::Idle => State::Idle,
                 NodeState::Running => State::Running,

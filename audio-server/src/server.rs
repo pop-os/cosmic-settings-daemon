@@ -276,6 +276,27 @@ impl Server {
         let (volume, balance) = *entry;
         set_node_volume(&mut model, node_id, volume, balance)
     }
+
+    /// Move a playback stream to a sink using WirePlumber's linking metadata.
+    pub async fn set_playback_sink(&mut self, playback_id: u32, sink_id: u32) -> Result<(), Error> {
+        let model = self.backend.model.lock().await;
+        if !model.playback_info.contains_key(playback_id) {
+            return Err(Error::InvalidPlayback);
+        }
+        let sink_serial = model
+            .sink_node_serials
+            .get(sink_id)
+            .ok_or(Error::InvalidSink)?;
+
+        model.pipewire_send(cosmic_pipewire::Request::SetMetadataProperty {
+            name: "default".to_owned(),
+            subject: playback_id,
+            key: "target.object".to_owned(),
+            type_: Some("Spa:Id".to_owned()),
+            value: Some(sink_serial.to_string()),
+        });
+        Ok(())
+    }
 }
 
 fn set_node_mute(
