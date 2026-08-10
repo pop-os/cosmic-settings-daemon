@@ -634,7 +634,7 @@ async fn main() -> ExitCode {
                 backlight_monitor_task(backlights, conn_clone).await;
             });
 
-            tokio::task::spawn_local(battery::monitor());
+            tokio::task::spawn_local(battery::low_power_monitor());
 
             let conn_clone = connection.clone();
             task::spawn_local(async move {

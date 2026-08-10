@@ -27,7 +27,6 @@ default-features = false
 features = ["tokio"]
 
 [dependencies]
-acpid_plug = "0.1.2"
 anyhow = "1.0.99"
 chrono = "0.4.42"
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }

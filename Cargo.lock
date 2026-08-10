@@ -3,16 +3,6 @@
 version = 4
 
 [[package]]
-name = "acpid_plug"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4749b4cc0bc6e487b73236a5b77e0cfe33122f4516f94fea48479dd66b17b4b0"
-dependencies = [
- "futures-util",
- "tokio",
-]
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -992,7 +982,6 @@ dependencies = [
 name = "cosmic-settings-daemon"
 version = "0.1.0"
 dependencies = [
- "acpid_plug",
  "anyhow",
  "calloop",
  "calloop-wayland-source",
