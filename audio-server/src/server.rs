@@ -20,6 +20,15 @@ impl Server {
 
     /// Request a non-blocking anonymous pipe for receiving audio events from the server.
     pub async fn recv_events(&mut self) -> Result<OwnedFd, Error> {
+        self.subscribe(false).await
+    }
+
+    /// Request a non-blocking anonymous pipe for receiving v2 audio events from the server.
+    pub async fn recv_events_v2(&mut self) -> Result<OwnedFd, Error> {
+        self.subscribe(true).await
+    }
+
+    async fn subscribe(&mut self, v2: bool) -> Result<OwnedFd, Error> {
         // Create an anonymous block
         let (writer, reader) = tokio::net::unix::pipe::pipe().map_err(|why| Error::IO {
             code: why.raw_os_error(),
@@ -31,12 +40,13 @@ impl Server {
             why: format!("{}", why),
         })?;
 
-        if self
-            .backend
-            .sender
-            .send(crate::backend::Message::Subscribe(Arc::new(writer)))
-            .is_err()
-        {
+        let message = if v2 {
+            crate::backend::Message::SubscribeV2(Arc::new(writer))
+        } else {
+            crate::backend::Message::Subscribe(Arc::new(writer))
+        };
+
+        if self.backend.sender.send(message).is_err() {
             return Err(Error::ChannelSend);
         }
 
