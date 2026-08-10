@@ -1,57 +1,96 @@
-use acpid_plug::AcPlugEvents;
+use futures::FutureExt;
 use notify_rust::Notification;
 use std::path::Path;
+use std::pin::Pin;
 use std::time::{Duration, Instant};
+use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::error::TryRecvError;
-use tokio::sync::mpsc::{Receiver, Sender};
 use tokio_stream::StreamExt;
-use upower_dbus::BatteryLevel;
-use zbus::Connection;
+use upower_dbus::{BatteryLevel, UPowerProxy};
+
+pub type OnBatteryFn = Box<dyn Fn(bool) -> Pin<Box<dyn Future<Output = bool>>>>;
 
 // TODO: Add config parameter for changing the preferred sound theme.
 
-pub async fn monitor() {
-    let Ok(ac_plug_events) = acpid_plug::connect().await else {
-        return;
+/// If a battery is detected, begin watching for on_battery events from upower.
+async fn watch_battery_plug_events(
+    conn: &zbus::Connection,
+    upower: &UPowerProxy<'static>,
+) -> (bool, OnBatteryFn) {
+    let mut line_power_device = None;
+    let line_power_device_path = match upower.enumerate_devices().await {
+        Ok(devices) => devices.into_iter().find(|device_path| {
+            device_path
+                .rsplit_once('/')
+                .is_some_and(|(_, name)| name.starts_with("line_power"))
+        }),
+        _ => None,
     };
 
-    let ac_plugged = ac_plug_events.plugged();
-    let (ac_plug_tx, ac_plug_rx) = tokio::sync::mpsc::channel(1);
-    tokio::task::spawn_local(ac_plug_monitor(ac_plug_events, ac_plug_tx));
-    low_power_monitor(ac_plugged, ac_plug_rx).await;
-}
+    if let Some(path) = line_power_device_path
+        && let Ok(device) = upower_dbus::DeviceProxy::new(conn, path).await
+        && let Ok(online) = device.online().await
+    {
+        line_power_device = Some((device, !online))
+    }
 
-/// Watch AC plug events and emit sounds on plug event changes.
-pub async fn ac_plug_monitor(
-    mut ac_plug_events: AcPlugEvents,
-    ac_plug_tx: Sender<acpid_plug::Event>,
-) {
-    if let Some(Ok(event)) = ac_plug_events.next().await {
-        let _res = ac_plug_tx.send(event).await;
+    match line_power_device {
+        Some((device, is_on_battery)) => {
+            let mut on_battery_plugged_stream = device.receive_online_changed().await;
+            let (battery_plugged_tx, battery_plugged_rx) =
+                tokio::sync::watch::channel(is_on_battery);
+            tokio::task::spawn_local(async move {
+                let mut debounce_task: Option<tokio::task::JoinHandle<bool>> = None;
+                loop {
+                    let Some(property) = on_battery_plugged_stream.next().await else {
+                        continue;
+                    };
 
-        // Use a tokio watch channel to debounce the ac plug events.
-        let (tx, mut rx) = tokio::sync::watch::channel(event);
+                    let Ok(is_online) = property.get().await else {
+                        continue;
+                    };
 
-        tokio::task::spawn_local(async move {
-            while let Some(Ok(event)) = ac_plug_events.next().await {
-                if tx.send(event).is_err() {
-                    break;
+                    // Cancel pending message-sending task if it is still waiting.
+                    if let Some(task) = debounce_task.take() {
+                        task.abort();
+
+                        // Break from this task if there was an error sending a message.
+                        if let Ok(true) = task.await {
+                            break;
+                        }
+                    }
+
+                    // Delay message-sending with a task that waits 500ms before sending.
+                    let battery_plugged_tx = battery_plugged_tx.clone();
+                    debounce_task = Some(tokio::task::spawn_local(async move {
+                        tokio::time::sleep(Duration::from_millis(500)).await;
+                        battery_plugged_tx.send(!is_online).is_err()
+                    }));
+
+                    continue;
                 }
-            }
-        });
+            });
 
-        // Listen for changes to the AC plug state.
-        while let Ok(()) = rx.changed().await {
-            let _res = ac_plug_tx.send(*rx.borrow_and_update()).await;
+            let watch_fn: OnBatteryFn = Box::new(move |on_battery: bool| {
+                let mut battery_plugged_rx = battery_plugged_rx.clone();
+                Box::pin(async move {
+                    _ = battery_plugged_rx.wait_for(|&v| v != on_battery).await;
+                    *battery_plugged_rx.borrow_and_update()
+                })
+            });
 
-            // Wait at least 500 ms before checking for another change.
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            (is_on_battery, watch_fn)
         }
+
+        None => (
+            false,
+            Box::new(|_on_battery: bool| futures::future::pending::<bool>().boxed()),
+        ),
     }
 }
 
-pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<acpid_plug::Event>) {
-    let Ok(conn) = Connection::system().await else {
+pub async fn low_power_monitor() {
+    let Some(conn) = crate::utils::zbus_system_connection().await else {
         return;
     };
 
@@ -67,24 +106,19 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
     let mut last_critical_notification = Instant::now();
     let mut last_low_notification = last_critical_notification;
     let mut percent_changed_stream = device.receive_percentage_changed().await;
+    let (mut is_on_battery, battery_plug_watch) = watch_battery_plug_events(&conn, &upower).await;
 
     let (nag_tx, nag_rx) = tokio::sync::mpsc::channel(1);
-
     tokio::task::spawn_local(critical_battery_nag(nag_rx));
 
     loop {
         tokio::select! {
-            event = ac_plug_rx.recv() => {
-                let Some(event) = event else {
-                    break
-                };
-
-                ac_plugged = event == acpid_plug::Event::Plugged;
-
-                on_ac_plug(event, current_battery);
+            _ = battery_plug_watch(is_on_battery) => {
+                is_on_battery = !is_on_battery;
+                on_ac_plug(!is_on_battery, current_battery);
 
                 if BatteryLevel::Critical == current_battery {
-                    let _res = nag_tx.send(!ac_plugged).await;
+                    let _res = nag_tx.send(is_on_battery).await;
                 }
             },
 
@@ -101,7 +135,7 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
                             }
 
                             current_battery = BatteryLevel::Critical;
-                            let _res = nag_tx.send(!ac_plugged).await;
+                            let _res = nag_tx.send(is_on_battery).await;
 
                             let now = Instant::now();
                             if now.duration_since(last_critical_notification) > Duration::from_secs(30) {
@@ -139,7 +173,6 @@ pub async fn low_power_monitor(mut ac_plugged: bool, mut ac_plug_rx: Receiver<ac
                                     .show_async()
                                     .await;
                             }
-
                         }
 
                         100.0 => {
@@ -186,8 +219,8 @@ async fn critical_battery_nag(mut watch: Receiver<bool>) {
 }
 
 /// Play a power plug sound on an AC plug event.
-fn on_ac_plug(event: acpid_plug::Event, battery_level: BatteryLevel) {
-    let (theme, sound) = if matches!(event, acpid_plug::Event::Plugged) {
+fn on_ac_plug(is_plugged: bool, battery_level: BatteryLevel) {
+    let (theme, sound) = if is_plugged {
         ("freedesktop", "power-plug")
     } else if Path::new("/usr/share/sounds/Pop/").exists()
         && matches!(battery_level, BatteryLevel::Low | BatteryLevel::Critical)
