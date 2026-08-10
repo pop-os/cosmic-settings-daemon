@@ -72,6 +72,25 @@ where
 
     #[zlink(
         interface = "com.system76.CosmicSettings.Audio",
+        rename = "RecvEventsV2",
+        return_fds
+    )]
+    pub async fn audio_recv_events_v2(&mut self) -> (Result<(), audio::Error>, Vec<OwnedFd>) {
+        let mut fds = Vec::new();
+        let mut this = self.0.lock().await;
+        let reply = match this.audio_server.recv_events_v2().await {
+            Ok(fd) => {
+                fds.push(fd);
+                Ok(())
+            }
+            Err(why) => Err(why),
+        };
+
+        (reply, fds)
+    }
+
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
         rename = "DefaultSink"
     )]
     pub async fn audio_default_sink(&mut self) -> Result<audio::Node, audio::Error> {

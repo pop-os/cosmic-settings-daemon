@@ -32,16 +32,30 @@ impl Client {
             Error,
         >,
     > {
-        self.conn
-            .recv_events()
-            .await
-            .map(|(result, mut fds)| match result {
-                Ok(()) => Ok(tokio_util::codec::FramedRead::new(
-                    tokio::net::unix::pipe::Receiver::from_owned_fd(fds.swap_remove(0)).unwrap(),
-                    codec::EventDecoder,
-                )),
-                Err(why) => Err(why),
-            })
+        use futures_util::{StreamExt, future::Either};
+
+        match self.conn.recv_events_v2().await {
+            Ok((Ok(()), mut fds)) => Ok(Ok(Either::Left(tokio_util::codec::FramedRead::new(
+                tokio::net::unix::pipe::Receiver::from_owned_fd(fds.swap_remove(0)).unwrap(),
+                codec::EventDecoder,
+            )))),
+            Ok((Err(why), _)) => Ok(Err(why)),
+            Err(_) => self
+                .conn
+                .recv_events()
+                .await
+                .map(|(result, mut fds)| match result {
+                    Ok(()) => Ok(Either::Right(
+                        tokio_util::codec::FramedRead::new(
+                            tokio::net::unix::pipe::Receiver::from_owned_fd(fds.swap_remove(0))
+                                .unwrap(),
+                            codec::EventV1Decoder,
+                        )
+                        .map(|result| result.map(Event::from)),
+                    )),
+                    Err(why) => Err(why),
+                }),
+        }
     }
 }
 
@@ -56,6 +70,10 @@ pub trait CosmicAudioProxy {
     /// Request to listen to audio events through the returned `OwnedFd`.
     #[zlink(return_fds)]
     async fn recv_events(&mut self) -> zlink::Result<(Result<(), Error>, Vec<OwnedFd>)>;
+
+    /// Request to listen to v2 audio events through the returned `OwnedFd`.
+    #[zlink(return_fds)]
+    async fn recv_events_v2(&mut self) -> zlink::Result<(Result<(), Error>, Vec<OwnedFd>)>;
 
     async fn default_sink(&mut self) -> zlink::Result<Result<Node, Error>>;
 

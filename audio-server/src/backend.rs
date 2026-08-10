@@ -1,9 +1,11 @@
 // Copyright 2024 System76 <info@system76.com>
 // SPDX-License-Identifier: GPL-3.0-only
 
+#![allow(deprecated)]
+
 use cosmic_config::ConfigSet;
 use cosmic_pipewire::{self as pipewire, Direction, NodeProps, PortType, ProfileClass};
-use cosmic_settings_audio_core::Event;
+use cosmic_settings_audio_core::{Event, EventV1};
 use cosmic_settings_daemon_config::{CosmicSettingsDaemonConfig, CosmicSettingsDaemonState};
 use futures_util::{SinkExt, StreamExt};
 use intmap::IntMap;
@@ -46,6 +48,8 @@ pub struct HeadsetProfile {
 pub struct Model {
     /// Varlink clients that are actively listening for events through Unix pipes.
     subscribers: Arc<tokio::sync::Mutex<Vec<pipe::Sender>>>,
+    /// Varlink clients listening for v2 events.
+    subscribers_v2: Arc<tokio::sync::Mutex<Vec<pipe::Sender>>>,
 
     /// The sending half of a channel for sending requests to cosmic-pipewire.
     pipewire_sender: Option<pipewire::Sender>,
@@ -117,6 +121,35 @@ pub struct Model {
     pub source_mute: bool,
 }
 
+async fn emit_serialized(
+    subscribers: Arc<tokio::sync::Mutex<Vec<pipe::Sender>>>,
+    serialized: String,
+) {
+    let mut subscribers_guard = subscribers.lock().await;
+    let subscribers: Vec<pipe::Sender> = std::mem::take(&mut subscribers_guard);
+    *subscribers_guard = subscribers
+        .into_iter()
+        .map(move |subscriber| {
+            let serialized = serialized.clone();
+            async move {
+                let mut writer = FramedWrite::new(subscriber, crate::codec::EventCodec);
+                if writer.send(serialized.as_bytes()).await.is_ok() {
+                    Some(writer.into_inner())
+                } else {
+                    None
+                }
+            }
+        })
+        .collect::<futures_util::stream::FuturesUnordered<_>>()
+        .fold(Vec::new(), |mut retained, result| async move {
+            if let Some(subscriber) = result {
+                retained.push(subscriber);
+            }
+            retained
+        })
+        .await;
+}
+
 impl Model {
     pub async fn new() -> Self {
         // Create if missing before creating a cosmic-config context.
@@ -136,6 +169,7 @@ impl Model {
             daemon_config_context,
             daemon_state_context,
             subscribers: Default::default(),
+            subscribers_v2: Default::default(),
             pipewire_sender: Default::default(),
             node_devices: Default::default(),
             node_info: Default::default(),
@@ -174,35 +208,17 @@ impl Model {
     /// Send events to subscribed clients.
     pub async fn emit_event(&self, event: Event) {
         let subscribers = self.subscribers.clone();
+        let subscribers_v2 = self.subscribers_v2.clone();
         _ = tokio::task::spawn_local(async move {
-            let Ok(serialized) = ron::ser::to_string(&event) else {
-                return;
-            };
+            let serialized_v1 = ron::ser::to_string(&EventV1::from(event.clone()));
+            let serialized_v2 = ron::ser::to_string(&event);
 
-            let serialized_bytes = serialized.as_bytes();
-
-            // Concurrently write event to subscribers and discard those who fail.
-            let mut subscribers_guard = subscribers.lock().await;
-            let subscribers: Vec<pipe::Sender> = std::mem::take(&mut subscribers_guard);
-            *subscribers_guard = subscribers
-                .into_iter()
-                .map(move |subscriber| async move {
-                    let mut writer = FramedWrite::new(subscriber, crate::codec::EventCodec);
-                    if writer.send(serialized_bytes).await.is_ok() {
-                        Some(writer.into_inner())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<futures_util::stream::FuturesUnordered<_>>()
-                .fold(Vec::new(), |mut retained, result| async move {
-                    if let Some(subscriber) = result {
-                        retained.push(subscriber);
-                    }
-
-                    retained
-                })
-                .await;
+            if let Ok(serialized) = serialized_v1 {
+                emit_serialized(subscribers, serialized).await;
+            }
+            if let Ok(serialized) = serialized_v2 {
+                emit_serialized(subscribers_v2, serialized).await;
+            }
         })
         .await;
     }
@@ -425,10 +441,19 @@ impl Model {
                 }
             }
 
-            Message::Subscribe(socket_path) => {
-                tracing::debug!(target: "audio-backend", "subscribing client");
+            message @ (Message::Subscribe(_) | Message::SubscribeV2(_)) => {
+                let (socket_path, v2) = match message {
+                    Message::Subscribe(socket_path) => (socket_path, false),
+                    Message::SubscribeV2(socket_path) => (socket_path, true),
+                    _ => unreachable!(),
+                };
+                tracing::debug!(target: "audio-backend", v2, "subscribing client");
                 let writer = Arc::into_inner(socket_path).unwrap();
-                let subscribers = self.subscribers.clone();
+                let subscribers = if v2 {
+                    self.subscribers_v2.clone()
+                } else {
+                    self.subscribers.clone()
+                };
 
                 let devices = self.device_info.clone();
                 let nodes = self.node_info.clone();
@@ -499,7 +524,13 @@ impl Model {
                                 .into_iter()
                                 .map(|(id, mute)| Event::NodeMute(id, mute)),
                         )
-                        .filter_map(|event| ron::ser::to_string(&event).ok());
+                        .filter_map(move |event| {
+                            if v2 {
+                                ron::ser::to_string(&event).ok()
+                            } else {
+                                ron::ser::to_string(&EventV1::from(event)).ok()
+                            }
+                        });
 
                     for event in current_events {
                         if writer.send(event.as_bytes()).await.is_err() {
@@ -1159,6 +1190,8 @@ pub enum Message {
     Server(Arc<Vec<pipewire::Event>>),
     /// Pipe for notifying clients about audio events.
     Subscribe(Arc<pipe::Sender>),
+    /// Pipe for notifying clients about v2 audio events.
+    SubscribeV2(Arc<pipe::Sender>),
     /// On init of the subscription, channels for closing background threads are given to the app.
     Init(Arc<pipewire::Sender>),
 }
