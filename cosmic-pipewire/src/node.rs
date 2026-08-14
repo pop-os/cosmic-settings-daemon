@@ -25,6 +25,14 @@ pub struct Node {
     pub media_class: MediaClass,
     pub node_name: String,
     pub state: State,
+    /// `application.name` — human-readable app name, set on stream nodes.
+    pub application_name: Option<String>,
+    /// `application.process.binary` — binary name, set on stream nodes.
+    pub application_binary: Option<String>,
+    /// `application.icon-name` — preferred icon name, set on stream nodes.
+    pub application_icon_name: Option<String>,
+    /// `media.name` — current media title (e.g. track/tab title), set on stream nodes.
+    pub media_name: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,6 +48,17 @@ pub enum State {
 pub enum MediaClass {
     Source,
     Sink,
+    /// `Stream/Output/Audio` — a per-application playback stream (sink-input equivalent).
+    StreamOutput,
+}
+
+/// Whether a playback stream belongs to PipeWire's internal routing graph.
+///
+/// PipeWire's loopback and combined-output helpers use these `node.name`
+/// prefixes. They are not user-facing applications and should not be exposed
+/// as application volume controls.
+fn is_internal_output_stream(node_name: &str) -> bool {
+    node_name.starts_with("output.loopback-") || node_name.starts_with("output.combined_")
 }
 
 impl Node {
@@ -59,6 +78,10 @@ impl Node {
         let mut node_description: &str = "";
         let mut node_name = String::new();
         let mut object_id = None;
+        let mut application_name = None;
+        let mut application_binary = None;
+        let mut application_icon_name = None;
+        let mut media_name = None;
 
         for (entry, value) in props.iter() {
             match entry {
@@ -89,6 +112,7 @@ impl Node {
                     media_class = Some(match value {
                         "Audio/Sink" => MediaClass::Sink,
                         "Audio/Source" => MediaClass::Source,
+                        "Stream/Output/Audio" => MediaClass::StreamOutput,
                         _ => return None,
                     })
                 }
@@ -99,8 +123,30 @@ impl Node {
                 // Family 17h/19h HD Audio Controller Analog Stereo
                 "node.description" => node_description = value,
 
+                // Firefox, Spotify (set on stream nodes)
+                "application.name" => application_name = Some(value.to_owned()),
+
+                // firefox, spotify (set on stream nodes)
+                "application.process.binary" => application_binary = Some(value.to_owned()),
+
+                // application-set icon name, preferred over icon-by-binary-name lookup
+                "application.icon-name" => application_icon_name = Some(value.to_owned()),
+
+                // current track/tab title (set on stream nodes)
+                "media.name" => media_name = Some(value.to_owned()),
+
                 _ => (),
             }
+        }
+
+        // Playback controls should enumerate user applications, not PipeWire's
+        // internal loopback or combined-output streams. Some valid applications
+        // (for example, Wine/Proton games) do not set `application.process.id`,
+        // so identify internal nodes by their PipeWire node name instead.
+        if matches!(media_class, Some(MediaClass::StreamOutput))
+            && is_internal_output_stream(&node_name)
+        {
+            return None;
         }
 
         let device = Node {
@@ -130,9 +176,35 @@ impl Node {
                 NodeState::Suspended => State::Suspended,
                 NodeState::Error(why) => State::Error(why.to_owned()),
             },
+            application_name,
+            application_binary,
+            application_icon_name,
+            media_name,
         };
 
         Some(device)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_internal_output_stream;
+
+    #[test]
+    fn filters_pipewire_internal_output_streams() {
+        assert!(is_internal_output_stream("output.loopback-123-45"));
+        assert!(is_internal_output_stream(
+            "output.combined_input.loopback-123-45"
+        ));
+        assert!(is_internal_output_stream(
+            "output.combined_alsa_output.pci-0000_00_00.0"
+        ));
+    }
+
+    #[test]
+    fn keeps_application_output_streams() {
+        assert!(!is_internal_output_stream("ACBlackFlag.exe"));
+        assert!(!is_internal_output_stream("firefox"));
     }
 }
 

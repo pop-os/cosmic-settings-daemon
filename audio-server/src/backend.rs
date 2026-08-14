@@ -72,7 +72,6 @@ pub struct Model {
     sink_node_ids: Vec<NodeId>,
     /// Node IDs for sources
     source_node_ids: Vec<NodeId>,
-
     /** Device object information */
 
     /// Information about devices that are shared with subscribed varlink clients.
@@ -946,13 +945,26 @@ impl Model {
                     self.node_devices.insert(node.object_id, device_id);
                 }
 
+                let kind = match node.media_class {
+                    pipewire::MediaClass::Sink => cosmic_settings_audio_core::NodeKind::Sink,
+                    pipewire::MediaClass::Source => cosmic_settings_audio_core::NodeKind::Source,
+                    pipewire::MediaClass::StreamOutput => {
+                        cosmic_settings_audio_core::NodeKind::StreamOutput
+                    }
+                };
+
                 let info = cosmic_settings_audio_core::NodeInfo {
                     name: node.node_name.clone(),
                     description: node.description,
                     device_profile_description: node.device_profile_description,
                     device_id: node.device_id,
                     card_profile_device: node.card_profile_device,
-                    is_sink: matches!(node.media_class, pipewire::MediaClass::Sink),
+                    is_sink: matches!(kind, cosmic_settings_audio_core::NodeKind::Sink),
+                    kind: Some(kind),
+                    application_name: node.application_name.clone(),
+                    application_binary: node.application_binary.clone(),
+                    application_icon_name: node.application_icon_name.clone(),
+                    media_name: node.media_name.clone(),
                 };
 
                 self.emit_event(Event::Node(node.object_id, info.clone()))
@@ -998,6 +1010,8 @@ impl Model {
                             }
                         }
                     }
+
+                    pipewire::MediaClass::StreamOutput => {}
                 }
 
                 self.node_info.insert(node.object_id, info.clone());
@@ -1063,8 +1077,13 @@ impl Model {
     }
 
     fn node_id_from_name(&self, name: &str, is_sink: bool) -> Option<u32> {
+        let expected_kind = if is_sink {
+            cosmic_settings_audio_core::NodeKind::Sink
+        } else {
+            cosmic_settings_audio_core::NodeKind::Source
+        };
         self.node_info.iter().find_map(|(id, n)| {
-            if n.name == name && n.is_sink == is_sink {
+            if n.name == name && n.kind == Some(expected_kind) {
                 Some(id)
             } else {
                 None

@@ -193,6 +193,14 @@ pub struct RouteInfo {
     pub is_sink: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum NodeKind {
+    Sink,
+    Source,
+    /// A per-application playback stream (sink-input equivalent).
+    StreamOutput,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct NodeInfo {
     pub name: String,
@@ -200,7 +208,18 @@ pub struct NodeInfo {
     pub device_profile_description: String,
     pub device_id: Option<u32>,
     pub card_profile_device: Option<u32>,
+    /// Retained for compatibility with existing audio clients.
     pub is_sink: bool,
+    /// The complete node classification. `None` is sent by older daemons.
+    pub kind: Option<NodeKind>,
+    /// `application.name` — set only for stream nodes.
+    pub application_name: Option<String>,
+    /// `application.process.binary` — set only for stream nodes.
+    pub application_binary: Option<String>,
+    /// `application.icon-name` — preferred icon name for stream nodes.
+    pub application_icon_name: Option<String>,
+    /// `media.name` — current media title, set only for stream nodes.
+    pub media_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
