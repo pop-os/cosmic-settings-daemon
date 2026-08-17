@@ -14,27 +14,36 @@ fn invalid_data<E: Error + Send + Sync + 'static>(err: E) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, err)
 }
 
+struct DdcThread {
+    brightness: Mutex<(u16, bool)>,
+    condvar: std::sync::Condvar,
+    setting: std::sync::atomic::AtomicBool,
+}
+
 pub struct BrightnessDevice {
     subsystem: Option<&'static str>,
     sysname: Option<String>,
     max_brightness: Option<u32>,
-    brightness_dcc: Arc<(Mutex<Option<u16>>, std::sync::Condvar)>,
+    brightness_dcc: Arc<DdcThread>,
 }
 
 impl Drop for BrightnessDevice {
     fn drop(&mut self) {
-        let mut g = self.brightness_dcc.0.lock().unwrap();
-        *g = None;
+        let mut g = self.brightness_dcc.brightness.lock().unwrap();
+        *g = (g.0, true);
 
-        self.brightness_dcc.1.notify_all();
+        self.brightness_dcc.condvar.notify_all();
     }
 }
 
 impl BrightnessDevice {
     pub fn external() -> Self {
-        let v: Arc<(Mutex<Option<u16>>, std::sync::Condvar)> =
-            Arc::new((Mutex::new(Some(100u16)), std::sync::Condvar::new()));
-        let brightness_dcc = v.clone();
+        let state: Arc<DdcThread> = Arc::new(DdcThread {
+            brightness: Mutex::new((100u16, false)),
+            condvar: std::sync::Condvar::new(),
+            setting: false.into(),
+        });
+        let brightness_dcc = state.clone();
         let displays_empty = Display::enumerate().is_empty();
 
         std::thread::spawn(move || {
@@ -51,17 +60,17 @@ impl BrightnessDevice {
             let mut cur = 100;
             'outer: loop {
                 let brightness = {
-                    let mut guard = v.0.lock().unwrap();
+                    let mut guard = state.brightness.lock().unwrap();
                     loop {
                         match *guard {
-                            None => break 'outer,
-                            Some(b) if b != cur => break b,
-                            Some(_) => {}
+                            (_, true) => break 'outer,
+                            (b, _) if b != cur => break b,
+                            (_, _) => {}
                         }
                         if displays.is_empty() {
-                            guard = v.1.wait(guard).unwrap();
+                            guard = state.condvar.wait(guard).unwrap();
                         } else {
-                            let (g, res) = v.1.wait_timeout(guard, IDLE_TIMEOUT).unwrap();
+                            let (g, res) = state.condvar.wait_timeout(guard, IDLE_TIMEOUT).unwrap();
                             guard = g;
                             if res.timed_out() {
                                 // Idle: release the i2c fds so unplugged
@@ -72,6 +81,7 @@ impl BrightnessDevice {
                     }
                 };
 
+                state.setting.store(true, std::sync::atomic::Ordering::Release);
                 cur = brightness;
                 if displays.is_empty() {
                     displays = Display::enumerate();
@@ -85,6 +95,7 @@ impl BrightnessDevice {
                         log::error!("Failed to set brightness: {err:?}");
                     }
                 }
+                state.setting.store(false, std::sync::atomic::Ordering::Release);
             }
         });
 
@@ -116,10 +127,17 @@ impl BrightnessDevice {
         }
 
         if ret.is_err() {
+            // Getting screen brightness via DDC while the brightness is being updated can be extremely slow,
+            // and can trigger wrongful "No display" error results due to reads failing with os error 121,
+            // so optimisticlly return thev value the display is being updated to
+            if self.brightness_dcc.setting.load(std::sync::atomic::Ordering::Acquire) {
+                return Ok(self.brightness_dcc.brightness.lock().unwrap().0.into());
+            }
             for mut d in Display::enumerate() {
                 if d.update_capabilities().is_err() {
                     continue;
                 }
+
                 if let Some(feature) = d.info.mccs_database.get(BRIGHTNESS)
                     && let Ok(value) = d.handle.get_vcp_feature(feature.code)
                 {
@@ -235,11 +253,11 @@ impl BrightnessDevice {
 
         let b_dcc = (clamped * 100 / self.max_brightness.unwrap_or(100)) as u16;
         {
-            let mut g = self.brightness_dcc.0.lock().unwrap();
-            *g = Some(b_dcc);
+            let mut g = self.brightness_dcc.brightness.lock().unwrap();
+            *g = (b_dcc, g.1);
         }
 
-        self.brightness_dcc.1.notify_all();
+        self.brightness_dcc.condvar.notify_all();
 
         if let Some((subsystem, sysname)) = self.subsystem.zip(self.sysname.as_ref()) {
             logind_session
