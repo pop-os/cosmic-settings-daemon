@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio_stream::StreamExt;
-use upower_dbus::{BatteryLevel, UPowerProxy};
+use upower_dbus::{BatteryLevel, BatteryType, UPowerProxy};
 
 pub type OnBatteryFn = Box<dyn Fn(bool) -> Pin<Box<dyn Future<Output = bool>>>>;
 
@@ -101,6 +101,9 @@ pub async fn low_power_monitor() {
     let Ok(device) = upower.get_display_device().await else {
         return;
     };
+    if !matches!(device.type_().await, Ok(BatteryType::Battery)) {
+        return;
+    }
 
     let mut current_battery = BatteryLevel::Full;
     let mut last_critical_notification = Instant::now();
