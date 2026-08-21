@@ -6,8 +6,8 @@
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anyhow::bail;
-use chrono::{DateTime, Days, Local};
+use anyhow::{Context, bail};
+use chrono::{DateTime, Days, Local, NaiveDate, NaiveTime, TimeZone};
 use cosmic::config::CosmicTk;
 use cosmic::theme::CosmicTheme;
 use cosmic_config::CosmicConfigEntry;
@@ -25,6 +25,118 @@ pub struct SunriseSunset {
     sunset: Instant,
     lat: f64,
     long: f64,
+}
+
+#[derive(Debug)]
+struct FixedSchedule {
+    dark_start: NaiveTime,
+    dark_end: NaiveTime,
+}
+
+/// Whether `now` falls in the dark window. start == end is treated as never dark.
+fn fixed_is_dark(dark_start: NaiveTime, dark_end: NaiveTime, now: NaiveTime) -> bool {
+    if dark_start < dark_end {
+        (dark_start..dark_end).contains(&now)
+    } else if dark_start > dark_end {
+        now >= dark_start || now < dark_end
+    } else {
+        false
+    }
+}
+
+fn st_to_instant(st: SystemTime) -> anyhow::Result<Instant> {
+    match st.duration_since(SystemTime::now()) {
+        Ok(ahead) => Instant::now()
+            .checked_add(ahead)
+            .context("Failed to convert system time to instant"),
+        Err(behind) => Instant::now()
+            .checked_sub(behind.duration())
+            .context("Failed to convert system time to instant"),
+    }
+}
+
+#[derive(Debug)]
+enum Schedule {
+    Solar(SunriseSunset),
+    Fixed(FixedSchedule),
+}
+
+impl Schedule {
+    pub fn is_dark(&self) -> anyhow::Result<bool> {
+        match self {
+            Self::Fixed(f) => Ok(f.is_dark()),
+            Self::Solar(s) => s.is_dark(),
+        }
+    }
+
+    pub fn update_next(&mut self) -> anyhow::Result<Instant> {
+        match self {
+            Self::Fixed(f) => f.update_next(),
+            Self::Solar(s) => s.update_next(),
+        }
+    }
+}
+
+impl FixedSchedule {
+    /// Build from the theme mode config; errors if either time is unset or invalid.
+    fn new(theme_mode: &ThemeMode) -> anyhow::Result<Self> {
+        // Config stores jiff civil::Time; convert to chrono NaiveTime.
+        // The i8 values returned by jiff can be casted because they are
+        // guaranteed to be > 0.
+        let dark_start = theme_mode
+            .auto_switch_dark_from
+            .and_then(|t| {
+                NaiveTime::from_hms_opt(t.hour() as u32, t.minute() as u32, t.second() as u32)
+            })
+            .context("auto_switch_dark_from is not set or invalid")?;
+        let dark_end = theme_mode
+            .auto_switch_dark_to
+            .and_then(|t| {
+                NaiveTime::from_hms_opt(t.hour() as u32, t.minute() as u32, t.second() as u32)
+            })
+            .context("auto_switch_dark_to is not set or invalid")?;
+        Ok(Self {
+            dark_start,
+            dark_end,
+        })
+    }
+
+    fn is_dark(&self) -> bool {
+        fixed_is_dark(self.dark_start, self.dark_end, Local::now().time())
+    }
+
+    /// Next occurrence of a wall-clock time: today if still ahead, else tomorrow.
+    fn next_occurrence(t: NaiveTime) -> anyhow::Result<Instant> {
+        let resolve = |day: NaiveDate| -> anyhow::Result<SystemTime> {
+            Ok(Local
+                .from_local_datetime(&day.and_time(t))
+                .single()
+                .with_context(|| format!("Failed to resolve {t} on {day} in the local timezone"))?
+                .into())
+        };
+
+        let today = Local::now().date_naive();
+        let today_st = resolve(today)?;
+        let day = if today_st > SystemTime::now() {
+            today
+        } else {
+            today
+                .checked_add_days(Days::new(1))
+                .context("Failed to calculate tomorrow for fixed schedule")?
+        };
+
+        st_to_instant(resolve(day)?)
+    }
+
+    fn next(&self) -> anyhow::Result<Instant> {
+        let start = Self::next_occurrence(self.dark_start)?;
+        let end = Self::next_occurrence(self.dark_end)?;
+        Ok(start.min(end))
+    }
+
+    fn update_next(&mut self) -> anyhow::Result<Instant> {
+        self.next()
+    }
 }
 
 pub enum ThemeMsg {
@@ -209,10 +321,17 @@ pub async fn watch_theme(
     // Track the most-recent coordinates so we can recompute sunrise/sunset after suspend or
     // wall-clock changes.
     let mut coords: Option<(f64, f64)> = None;
-    let mut sunrise_sunset: Option<SunriseSunset> = None;
+    let mut schedule: Option<Schedule> = None;
+    if theme_mode.auto_switch_fixed_source {
+        match FixedSchedule::new(&theme_mode) {
+            Ok(f) => schedule = Some(Schedule::Fixed(f)),
+            Err(err) => log::error!("Failed to initialize the fixed schedule: {err:?}"),
+        }
+    };
+
     loop {
-        let sunset_deadline =
-            if let Some(Some(s)) = theme_mode.auto_switch.then_some(sunrise_sunset.as_mut()) {
+        let schedule_deadline =
+            if let Some(Some(s)) = theme_mode.auto_switch.then_some(schedule.as_mut()) {
                 Some(s.update_next()?)
             } else {
                 None
@@ -221,7 +340,7 @@ pub async fn watch_theme(
         let sleep = async move {
             if !theme_mode.auto_switch {
                 std::future::pending().await
-            } else if let Some(s) = sunset_deadline {
+            } else if let Some(s) = schedule_deadline {
                 tokio::time::sleep_until(s).await
             } else {
                 std::future::pending().await
@@ -242,16 +361,28 @@ pub async fn watch_theme(
                     ThemeMsg::ThemeMode(changes) => {
                         let auto_switch_prev = theme_mode.auto_switch;
 
-                        let (errs, _) = theme_mode.update_keys(&helper, &[changes]);
+                        let (errs, _) = theme_mode.update_keys(&helper, &[changes.clone()]);
 
                         for err in errs {
                             log::error!("Error updating the theme mode {err:?}");
                         }
 
-                        override_until_next = sunrise_sunset.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark));
+                        // Fixed times may have changed so rebuild the schedule.
+                        if theme_mode.auto_switch_fixed_source {
+                            match FixedSchedule::new(&theme_mode) {
+                                Ok(f) => schedule = Some(Schedule::Fixed(f)),
+                                Err(err) => {
+                                    log::error!("Failed to update the fixed schedule: {err:?}");
+                                    schedule = None;
+                                }
+                            }
+                        }
 
-                        if theme_mode.auto_switch && !auto_switch_prev {
-                            let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
+                        override_until_next = schedule.as_ref().is_some_and(|s| s.is_dark().is_ok_and(|s_is_dark| s_is_dark != theme_mode.is_dark));
+
+                        // Force to set correct theme color for a fixed schedule since the times can have changed
+                        if  theme_mode.auto_switch_fixed_source || (theme_mode.auto_switch && !auto_switch_prev) {
+                            let Some(is_dark) = schedule.as_ref().and_then(|s| s.is_dark().ok()) else {
                                 continue;
                             };
 
@@ -380,7 +511,7 @@ pub async fn watch_theme(
                     continue;
                 }
                 // update the theme mode
-                let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
+                let Some(is_dark) = schedule.as_ref().and_then(|s| s.is_dark().ok()) else {
                     continue;
                 };
 
@@ -422,6 +553,11 @@ pub async fn watch_theme(
                     continue;
                 };
 
+                if theme_mode.auto_switch_fixed_source {
+                    // Coordinates are irrelevant for fixed schedules
+                    continue;
+                }
+
                 let Some(&GeoPosition { latitude, longitude }) = geodata.get(&new_timezone) else {
                     log::error!("no matching geodata for {new_timezone}");
                     continue;
@@ -430,11 +566,11 @@ pub async fn watch_theme(
                 coords = Some((latitude, longitude));
                 match SunriseSunset::new(latitude, longitude, None) {
                     Ok(s) => {
-                        sunrise_sunset = Some(s);
+                        schedule = Some(Schedule::Solar(s));
                     },
                     Err(err) => {
                         log::error!("Failed to calculate sunrise and sunset for current location {err:?}");
-                        sunrise_sunset = None;
+                        schedule = None;
                         continue;
                     },
                 };
@@ -443,7 +579,7 @@ pub async fn watch_theme(
                     continue;
                 }
 
-                let Some(is_dark) = sunrise_sunset.as_ref().unwrap().is_dark().ok() else {
+                let Some(is_dark) = schedule.as_ref().unwrap().is_dark().ok() else {
                     continue;
                 };
 
@@ -479,25 +615,29 @@ pub async fn watch_theme(
                 // Suspend/resume and wall-clock steps (NTP, manual) do not advance tokio's
                 // monotonic `Instant` the same way. Recompute sunrise/sunset instants so the next
                 // sleep deadline and current day/night evaluation match wall-clock time.
-                let Some((latitude, longitude)) = coords else {
-                    continue;
-                };
-
-                match SunriseSunset::new(latitude, longitude, None) {
-                    Ok(s) => sunrise_sunset = Some(s),
-                    Err(err) => {
-                        log::error!("Failed to recalculate sunrise/sunset after {time_change:?}: {err:?}");
-                        sunrise_sunset = None;
+                if theme_mode.auto_switch_fixed_source {
+                    // FixedSchedule derives everything from the wall clock; nothing to re-anchor.
+                } else {
+                    let Some((latitude, longitude)) = coords else {
                         continue;
-                    }
-                };
+                    };
+
+                    match SunriseSunset::new(latitude, longitude, None) {
+                        Ok(s) => schedule = Some(Schedule::Solar(s)),
+                        Err(err) => {
+                            log::error!("Failed to recalculate sunrise/sunset after {time_change:?}: {err:?}");
+                            schedule = None;
+                            continue;
+                        }
+                    };
+                }
 
                 // If auto-switch isn't enabled, keep the timer state fresh and bail.
                 if !theme_mode.auto_switch {
                     continue;
                 }
 
-                let Some(is_dark) = sunrise_sunset.as_ref().and_then(|s| s.is_dark().ok()) else {
+                let Some(is_dark) = schedule.as_ref().and_then(|s| s.is_dark().ok()) else {
                     continue;
                 };
 
@@ -640,4 +780,42 @@ fn set_flatpak_overrides() {
                 .await;
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::fixed_is_dark;
+    use chrono::NaiveTime;
+
+    fn t(s: &str) -> NaiveTime {
+        NaiveTime::parse_from_str(s, "%H:%M").unwrap()
+    }
+
+    #[test]
+    fn fixed_wraparound() {
+        // Window wrapping midnight: 22:00 -> 07:00
+        let start = t("22:00");
+        let end = t("07:00");
+        assert!(fixed_is_dark(start, end, t("22:00")));
+        assert!(fixed_is_dark(start, end, t("23:30")));
+        assert!(fixed_is_dark(start, end, t("03:00")));
+        assert!(fixed_is_dark(start, end, t("06:59")));
+        assert!(!fixed_is_dark(start, end, t("07:00")));
+        assert!(!fixed_is_dark(start, end, t("12:00")));
+        assert!(!fixed_is_dark(start, end, t("21:59")));
+
+        // Same-day window: 01:00 -> 05:00
+        let start = t("01:00");
+        let end = t("05:00");
+        assert!(fixed_is_dark(start, end, t("01:00")));
+        assert!(fixed_is_dark(start, end, t("03:00")));
+        assert!(fixed_is_dark(start, end, t("04:59")));
+        assert!(!fixed_is_dark(start, end, t("00:30")));
+        assert!(!fixed_is_dark(start, end, t("06:00")));
+
+        let same = t("12:00");
+        assert!(!fixed_is_dark(same, same, t("11:00")));
+        assert!(!fixed_is_dark(same, same, t("12:00")));
+        assert!(!fixed_is_dark(same, same, t("13:00")));
+    }
 }
