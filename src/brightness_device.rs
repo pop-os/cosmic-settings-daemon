@@ -17,7 +17,7 @@ fn invalid_data<E: Error + Send + Sync + 'static>(err: E) -> io::Error {
 struct DdcThread {
     brightness: Mutex<(u16, bool)>,
     condvar: std::sync::Condvar,
-    setting: std::sync::atomic::AtomicBool,
+    loading: std::sync::atomic::AtomicBool,
 }
 
 pub struct BrightnessDevice {
@@ -38,12 +38,12 @@ impl Drop for BrightnessDevice {
 
 impl BrightnessDevice {
     pub fn external() -> Self {
-        let state: Arc<DdcThread> = Arc::new(DdcThread {
+        let brightness_update: Arc<DdcThread> = Arc::new(DdcThread {
             brightness: Mutex::new((100u16, false)),
             condvar: std::sync::Condvar::new(),
-            setting: false.into(),
+            loading: false.into(),
         });
-        let brightness_dcc = state.clone();
+        let brightness_dcc = brightness_update.clone();
         let displays_empty = Display::enumerate().is_empty();
 
         std::thread::spawn(move || {
@@ -60,7 +60,7 @@ impl BrightnessDevice {
             let mut cur = 100;
             'outer: loop {
                 let brightness = {
-                    let mut guard = state.brightness.lock().unwrap();
+                    let mut guard = brightness_update.brightness.lock().unwrap();
                     loop {
                         match *guard {
                             (_, true) => break 'outer,
@@ -68,9 +68,9 @@ impl BrightnessDevice {
                             (_, _) => {}
                         }
                         if displays.is_empty() {
-                            guard = state.condvar.wait(guard).unwrap();
+                            guard = brightness_update.condvar.wait(guard).unwrap();
                         } else {
-                            let (g, res) = state.condvar.wait_timeout(guard, IDLE_TIMEOUT).unwrap();
+                            let (g, res) = brightness_update.condvar.wait_timeout(guard, IDLE_TIMEOUT).unwrap();
                             guard = g;
                             if res.timed_out() {
                                 // Idle: release the i2c fds so unplugged
@@ -81,7 +81,7 @@ impl BrightnessDevice {
                     }
                 };
 
-                state.setting.store(true, std::sync::atomic::Ordering::Release);
+                brightness_update.loading.store(true, std::sync::atomic::Ordering::Release);
                 cur = brightness;
                 if displays.is_empty() {
                     displays = Display::enumerate();
@@ -95,7 +95,7 @@ impl BrightnessDevice {
                         log::error!("Failed to set brightness: {err:?}");
                     }
                 }
-                state.setting.store(false, std::sync::atomic::Ordering::Release);
+                brightness_update.loading.store(false, std::sync::atomic::Ordering::Release);
             }
         });
 
@@ -127,10 +127,7 @@ impl BrightnessDevice {
         }
 
         if ret.is_err() {
-            // Getting screen brightness via DDC while the brightness is being updated can be extremely slow,
-            // and can trigger wrongful "No display" error results due to reads failing with os error 121,
-            // so optimisticlly return thev value the display is being updated to
-            if self.brightness_dcc.setting.load(std::sync::atomic::Ordering::Acquire) {
+            if self.brightness_dcc.loading.load(std::sync::atomic::Ordering::Acquire) {
                 return Ok(self.brightness_dcc.brightness.lock().unwrap().0.into());
             }
             for mut d in Display::enumerate() {
