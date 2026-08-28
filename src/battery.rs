@@ -17,76 +17,88 @@ async fn watch_battery_plug_events(
     conn: &zbus::Connection,
     upower: &UPowerProxy<'static>,
 ) -> (bool, OnBatteryFn) {
-    let mut line_power_device = None;
-    let line_power_device_path = match upower.enumerate_devices().await {
-        Ok(devices) => devices.into_iter().find(|device_path| {
-            device_path
-                .rsplit_once('/')
-                .is_some_and(|(_, name)| name.starts_with("line_power"))
-        }),
-        _ => None,
+    let line_power_paths = match upower.enumerate_devices().await {
+        Ok(devices) => devices
+            .into_iter()
+            .filter(|device_path| {
+                device_path
+                    .rsplit_once('/')
+                    .is_some_and(|(_, name)| name.starts_with("line_power"))
+            })
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
     };
 
-    if let Some(path) = line_power_device_path
-        && let Ok(device) = upower_dbus::DeviceProxy::new(conn, path).await
-        && let Ok(online) = device.online().await
-    {
-        line_power_device = Some((device, !online))
+    let mut line_power_devices = Vec::new();
+    for path in line_power_paths {
+        if let Ok(device) = upower_dbus::DeviceProxy::new(conn, path).await {
+            line_power_devices.push(device);
+        }
     }
 
-    match line_power_device {
-        Some((device, is_on_battery)) => {
-            let mut on_battery_plugged_stream = device.receive_online_changed().await;
-            let (battery_plugged_tx, battery_plugged_rx) =
-                tokio::sync::watch::channel(is_on_battery);
-            tokio::task::spawn_local(async move {
-                let mut debounce_task: Option<tokio::task::JoinHandle<bool>> = None;
-                loop {
-                    let Some(property) = on_battery_plugged_stream.next().await else {
-                        continue;
-                    };
-
-                    let Ok(is_online) = property.get().await else {
-                        continue;
-                    };
-
-                    // Cancel pending message-sending task if it is still waiting.
-                    if let Some(task) = debounce_task.take() {
-                        task.abort();
-
-                        // Break from this task if there was an error sending a message.
-                        if let Ok(true) = task.await {
-                            break;
-                        }
-                    }
-
-                    // Delay message-sending with a task that waits 500ms before sending.
-                    let battery_plugged_tx = battery_plugged_tx.clone();
-                    debounce_task = Some(tokio::task::spawn_local(async move {
-                        tokio::time::sleep(Duration::from_millis(500)).await;
-                        battery_plugged_tx.send(!is_online).is_err()
-                    }));
-
-                    continue;
-                }
-            });
-
-            let watch_fn: OnBatteryFn = Box::new(move |on_battery: bool| {
-                let mut battery_plugged_rx = battery_plugged_rx.clone();
-                Box::pin(async move {
-                    _ = battery_plugged_rx.wait_for(|&v| v != on_battery).await;
-                    *battery_plugged_rx.borrow_and_update()
-                })
-            });
-
-            (is_on_battery, watch_fn)
-        }
-
-        None => (
+    if line_power_devices.is_empty() {
+        return (
             false,
             Box::new(|_on_battery: bool| futures::future::pending::<bool>().boxed()),
-        ),
+        );
     }
+
+    let is_on_battery = !any_line_power_online(&line_power_devices).await;
+
+    let mut online_changes = futures::stream::SelectAll::new();
+    for device in &line_power_devices {
+        online_changes.push(device.receive_online_changed().await);
+    }
+
+    let (battery_plugged_tx, battery_plugged_rx) = tokio::sync::watch::channel(is_on_battery);
+    tokio::task::spawn_local(async move {
+        let mut debounce_task: Option<tokio::task::JoinHandle<bool>> = None;
+        loop {
+            if online_changes.next().await.is_none() {
+                continue;
+            }
+
+            let on_battery = !any_line_power_online(&line_power_devices).await;
+
+            // Cancel pending message-sending task if it is still waiting.
+            if let Some(task) = debounce_task.take() {
+                task.abort();
+
+                // Break from this task if there was an error sending a message.
+                if let Ok(true) = task.await {
+                    break;
+                }
+            }
+
+            // Delay message-sending with a task that waits 500ms before sending.
+            let battery_plugged_tx = battery_plugged_tx.clone();
+            debounce_task = Some(tokio::task::spawn_local(async move {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+                battery_plugged_tx.send(on_battery).is_err()
+            }));
+        }
+    });
+
+    let watch_fn: OnBatteryFn = Box::new(move |on_battery: bool| {
+        let mut battery_plugged_rx = battery_plugged_rx.clone();
+        Box::pin(async move {
+            _ = battery_plugged_rx.wait_for(|&v| v != on_battery).await;
+            *battery_plugged_rx.borrow_and_update()
+        })
+    });
+
+    (is_on_battery, watch_fn)
+}
+
+/// Whether any line power device reports being online.
+async fn any_line_power_online(devices: &[upower_dbus::DeviceProxy<'static>]) -> bool {
+    for device in devices {
+        if let Ok(true) = device.online().await {
+            return true;
+        }
+    }
+
+    false
 }
 
 pub async fn low_power_monitor() {
