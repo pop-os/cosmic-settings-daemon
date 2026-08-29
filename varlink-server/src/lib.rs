@@ -341,6 +341,23 @@ where
             .set_playback_sink(playback_id, sink_id)
             .await
     }
+
+    #[zlink(
+        interface = "com.system76.CosmicSettings.Audio",
+        rename = "SetPlaybackSource"
+    )]
+    pub async fn audio_set_playback_source(
+        &mut self,
+        recording_id: u32,
+        source_id: u32,
+    ) -> Result<(), audio::Error> {
+        self.0
+            .lock()
+            .await
+            .audio_server
+            .set_playback_source(recording_id, source_id)
+            .await
+    }
 }
 
 pub struct DaemonInner {
