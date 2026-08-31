@@ -8,6 +8,8 @@ publish = false
 [dependencies]
 cosmic-settings-audio-core = { path = "../audio-core"}
 cosmic-settings-audio-server = { path = "../audio-server" }
+cosmic-settings-printers-core = { git = "https://github.com/Abd002/cosmic-printers.git" }
+cosmic-settings-printers-server = { git = "https://github.com/Abd002/cosmic-printers.git" }
 dirs = "6.0.0"
 futures-util = "0.3.32"
 serde = "1.0.228"
