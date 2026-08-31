@@ -315,6 +315,26 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
+version = "0.71.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f58bf3d7db68cfbac37cfc485a8d711e87e064c3d0fe0435b92f7a407f9d6b3"
+dependencies = [
+ "bitflags 2.13.0",
+ "cexpr",
+ "clang-sys",
+ "itertools",
+ "log",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 2.1.3",
+ "shlex 1.3.0",
+ "syn 2.0.118",
+]
+
+[[package]]
+name = "bindgen"
 version = "0.72.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "993776b509cfb49c750f11b8f07a46fa23e0a1386ffc01fb1e7d343efc387895"
@@ -1035,11 +1055,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmic-settings-printers-core"
+version = "0.1.0"
+source = "git+https://github.com/Abd002/cosmic-printers.git#8ddb9f4dd59bf125710db98d75247caf652a397e"
+dependencies = [
+ "nix",
+ "serde",
+ "zlink",
+]
+
+[[package]]
+name = "cosmic-settings-printers-server"
+version = "0.1.0"
+source = "git+https://github.com/Abd002/cosmic-printers.git#8ddb9f4dd59bf125710db98d75247caf652a397e"
+dependencies = [
+ "cosmic-settings-printers-core",
+ "cups_rs",
+ "futures-util",
+ "nix",
+ "percent-encoding",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+ "zlink",
+]
+
+[[package]]
 name = "cosmic-settings-varlink-server"
 version = "1.0.0"
 dependencies = [
  "cosmic-settings-audio-core",
  "cosmic-settings-audio-server",
+ "cosmic-settings-printers-core",
+ "cosmic-settings-printers-server",
  "dirs",
  "futures-util",
  "serde",
@@ -1182,6 +1232,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "83cf0d42651b16c6dfe68685716d18480d18a9c39c62d76e8cf3eb6ed5d8bcbf"
 dependencies = [
  "dtor",
+]
+
+[[package]]
+name = "cups_rs"
+version = "0.3.0"
+source = "git+https://github.com/Abd002/cups-rs.git?branch=cups3-pr6-signatures#244356f1952ba36d8a13e6911848f7978243b5d6"
+dependencies = [
+ "bindgen 0.71.1",
+ "chrono",
+ "libc",
+ "pkg-config",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3152,7 +3214,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69ad52764fca54818486f3cf75afec844d1f1a1568c24dcee25d41b1ab007dda"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "cc",
  "system-deps",
 ]
@@ -3545,6 +3607,19 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "nix"
+version = "0.30.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
+dependencies = [
+ "bitflags 2.13.0",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+ "memoffset",
 ]
 
 [[package]]
@@ -4032,7 +4107,7 @@ version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2089f245b548723e60325773c27f586b7a2372c79ea941b246cd0d654706adc"
 dependencies = [
- "bindgen",
+ "bindgen 0.72.1",
  "libspa-sys",
  "system-deps",
 ]
@@ -4126,6 +4201,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
+]
+
+[[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.118",
 ]
 
 [[package]]
