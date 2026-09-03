@@ -154,7 +154,7 @@ pub trait CosmicAudioProxy {
     ) -> zlink::Result<Result<(), Error>>;
 
     /// Move a recording stream to an audio source.
-    async fn set_playback_source(
+    async fn set_recording_source(
         &mut self,
         recording_id: u32,
         source_id: u32,

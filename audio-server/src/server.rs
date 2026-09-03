@@ -299,7 +299,7 @@ impl Server {
     }
 
     /// Move a recording stream to a source using WirePlumber's linking metadata.
-    pub async fn set_playback_source(
+    pub async fn set_recording_source(
         &mut self,
         recording_id: u32,
         source_id: u32,

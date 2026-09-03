@@ -344,9 +344,9 @@ where
 
     #[zlink(
         interface = "com.system76.CosmicSettings.Audio",
-        rename = "SetPlaybackSource"
+        rename = "SetRecordingSource"
     )]
-    pub async fn audio_set_playback_source(
+    pub async fn audio_set_recording_source(
         &mut self,
         recording_id: u32,
         source_id: u32,
@@ -355,7 +355,7 @@ where
             .lock()
             .await
             .audio_server
-            .set_playback_source(recording_id, source_id)
+            .set_recording_source(recording_id, source_id)
             .await
     }
 }
