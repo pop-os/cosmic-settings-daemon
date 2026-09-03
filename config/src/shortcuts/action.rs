@@ -67,6 +67,10 @@ pub enum Action {
     /// Move a window to the given workspace
     MoveToWorkspace(u8),
 
+    /// Move a window to the given workspace on the output matching the given
+    /// connector name or EDID model substring, and follow it
+    MoveToWorkspaceOnOutput(String, u8),
+
     #[deprecated]
     /// Change focus to the next output
     NextOutput,
@@ -110,6 +114,10 @@ pub enum Action {
     /// Move a window to the given workspace
     SendToWorkspace(u8),
 
+    /// Move a window to the given workspace on the output matching the given
+    /// connector name or EDID model substring
+    SendToWorkspaceOnOutput(String, u8),
+
     /// Swap positions of the active window with another
     SwapWindow,
 
@@ -142,6 +150,10 @@ pub enum Action {
 
     /// Change focus to the given workspace ID
     Workspace(u8),
+
+    /// Change focus to the given workspace ID on the output matching the given
+    /// connector name or EDID model substring
+    WorkspaceOnOutput(String, u8),
 
     /// Enter Magnification / Increase the zoom level by the configured interval
     ZoomIn,
@@ -276,6 +288,34 @@ impl std::ops::Not for Orientation {
         match self {
             Orientation::Horizontal => Orientation::Vertical,
             Orientation::Vertical => Orientation::Horizontal,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+
+    #[test]
+    fn output_addressed_actions_ron_roundtrip() {
+        let cases = [
+            (
+                r#"WorkspaceOnOutput("LS32A70", 2)"#,
+                Action::WorkspaceOnOutput("LS32A70".into(), 2),
+            ),
+            (
+                r#"MoveToWorkspaceOnOutput("O34", 4)"#,
+                Action::MoveToWorkspaceOnOutput("O34".into(), 4),
+            ),
+            (
+                r#"SendToWorkspaceOnOutput("DP-3", 1)"#,
+                Action::SendToWorkspaceOnOutput("DP-3".into(), 1),
+            ),
+        ];
+        for (text, action) in cases {
+            assert_eq!(ron::from_str::<Action>(text).unwrap(), action);
+            let serialized = ron::to_string(&action).unwrap();
+            assert_eq!(ron::from_str::<Action>(&serialized).unwrap(), action);
         }
     }
 }
