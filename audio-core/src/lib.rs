@@ -13,6 +13,8 @@ pub enum Error {
     NoActiveSource,
     InvalidPlayback,
     InvalidSink,
+    InvalidRecording,
+    InvalidSource,
 }
 
 impl std::fmt::Display for Error {
@@ -24,6 +26,8 @@ impl std::fmt::Display for Error {
             Error::NoActiveSource => f.write_str("no active source to apply operation to"),
             Error::InvalidPlayback => f.write_str("node is not an audio playback stream"),
             Error::InvalidSink => f.write_str("node is not an audio sink"),
+            Error::InvalidRecording => f.write_str("node is not an audio recording stream"),
+            Error::InvalidSource => f.write_str("node is not an audio source"),
         }
     }
 }
@@ -110,6 +114,10 @@ pub enum Event {
     Playback(u32, PlaybackInfo),
     /// The sink explicitly targeted by a playback stream, or `None` to follow the default sink.
     PlaybackTarget(u32, Option<u32>),
+    /// Add an audio recording stream.
+    Recording(u32, RecordingInfo),
+    /// The source that a recording stream is capturing from, if any
+    RecordingTarget(u32, Option<u32>),
     /// Mute status of a node changed.
     NodeMute(u32, bool),
     /// Volume of a node changed.
@@ -167,6 +175,7 @@ impl From<Event> for EventV1 {
             Event::MonoAudio(enabled) => Self::MonoAudio(enabled),
             Event::Node(id, info) => Self::Node(id, info),
             Event::Playback(..) | Event::PlaybackTarget(..) => Self::Unknown,
+            Event::Recording(..) | Event::RecordingTarget(..) => Self::Unknown,
             Event::NodeMute(id, mute) => Self::NodeMute(id, mute),
             Event::NodeVolume(id, volume, balance) => Self::NodeVolume(id, volume, balance),
             Event::Profile(id, index, info) => Self::Profile(id, index, info),
@@ -234,6 +243,25 @@ pub struct PlaybackInfo {
     pub icon_name: Option<String>,
     pub media_name: Option<String>,
     pub node_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RecordingInfo {
+    pub application_id: Option<String>,
+    pub application_name: Option<String>,
+    pub icon_name: Option<String>,
+    pub media_name: Option<String>,
+    pub node_name: String,
+    pub state: StreamState,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum StreamState {
+    Idle,
+    Running,
+    Creating,
+    Suspended,
+    Error,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
