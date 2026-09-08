@@ -337,14 +337,10 @@ where
                     return;
                 };
 
-                match param_type {
-                    ParamType::Props => {
-                        if let Some(props) = NodeProps::from_pod(pod) {
-                            state.borrow_mut().set_node_props(node_id, props);
-                        }
-                    }
-
-                    _ => (),
+                if param_type == ParamType::Props
+                    && let Some(props) = NodeProps::from_pod(pod)
+                {
+                    state.borrow_mut().set_node_props(node_id, props);
                 }
             }
         })
@@ -447,16 +443,11 @@ where
                         return 0;
                     };
 
-                    match key {
-                        "node.features.audio.mono" => {
-                            if let Ok(value) = serde_json::de::from_str::<BooleanProperty>(value)
-                                && let Some(state) = state.upgrade()
-                            {
-                                state.borrow_mut().mono_audio(value.value);
-                            }
-                        }
-
-                        _ => (),
+                    if key == "node.features.audio.mono"
+                        && let Ok(value) = serde_json::de::from_str::<BooleanProperty>(value)
+                        && let Some(state) = state.upgrade()
+                    {
+                        state.borrow_mut().mono_audio(value.value);
                     }
 
                     0
