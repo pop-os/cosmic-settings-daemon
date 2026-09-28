@@ -158,8 +158,8 @@ pub async fn watch_theme(
 
     set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
     set_gnome_icon_theme(tk.icon_theme.clone());
-    set_gnome_font_name(tk.interface_font.family.clone());
-    set_gnome_monospace_font_name(tk.monospace_font.family.clone());
+    set_gnome_font_name(tk.interface_font.family.clone(), "font-name");
+    set_gnome_font_name(tk.monospace_font.family.clone(), "monospace-font-name");
 
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
@@ -296,11 +296,11 @@ pub async fn watch_theme(
                         }
 
                         if changes.contains(&"interface_font") {
-                            set_gnome_font_name(tk.interface_font.family.clone());
+                            set_gnome_font_name(tk.interface_font.family.clone(), "font-name");
                         }
 
                         if changes.contains(&"monospace_font") {
-                            set_gnome_monospace_font_name(tk.monospace_font.family.clone());
+                            set_gnome_font_name(tk.monospace_font.family.clone(), "monospace-font-name");
                         }
 
                         if changes.contains(&"show_maximize") || changes.contains(&"show_minimize") {
@@ -622,13 +622,21 @@ fn set_gnome_icon_theme(theme: String) {
     });
 }
 
-fn set_gnome_font_name(font_name: String) {
+fn set_gnome_font_name(family: String, font_key: &str) {
+    let font_key = font_key.to_owned();
+
     tokio::spawn(async move {
+        // Retrieve the current font size for the given GNOME font key. Omitting
+        // this may break apps that expect a full Pango font description like
+        // VTE terminals.
+        let size = get_gnome_font_size(&font_key).await;
+        let font_name = format!("{family} {size}");
+
         let _res = tokio::process::Command::new("gsettings")
             .args([
                 "set",
                 "org.gnome.desktop.interface",
-                "font-name",
+                &font_key,
                 font_name.as_str(),
             ])
             .status()
@@ -636,18 +644,30 @@ fn set_gnome_font_name(font_name: String) {
     });
 }
 
-fn set_gnome_monospace_font_name(font_name: String) {
-    tokio::spawn(async move {
-        let _res = tokio::process::Command::new("gsettings")
-            .args([
-                "set",
-                "org.gnome.desktop.interface",
-                "monospace-font-name",
-                font_name.as_str(),
-            ])
-            .status()
-            .await;
-    });
+async fn get_gnome_font_size(key: &str) -> String {
+    let current = tokio::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", key])
+        .output()
+        .await
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned());
+
+    current
+        .as_deref()
+        .and_then(font_description_size)
+        // Fallback to default COSMIC text/interface font size (14px) converted
+        // to Pango points at 96 DPI.
+        .unwrap_or("10.5")
+        .to_owned()
+}
+
+fn font_description_size(description: &str) -> Option<&str> {
+    let (_, size) = description.trim().rsplit_once(' ')?;
+    let number = size.strip_suffix("px").unwrap_or(size);
+    let value: f64 = number.parse().ok()?;
+
+    (value.is_finite() && value > 0.0).then_some(size)
 }
 
 fn set_flatpak_overrides() {
