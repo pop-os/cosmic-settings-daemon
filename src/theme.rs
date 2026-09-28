@@ -622,8 +622,11 @@ fn set_gnome_icon_theme(theme: String) {
     });
 }
 
-fn set_gnome_font_name(font_name: String) {
+fn set_gnome_font_name(family: String) {
     tokio::spawn(async move {
+        let size = get_gnome_font_size("font-name").await;
+        let font_name = format!("{family} {size}");
+
         let _res = tokio::process::Command::new("gsettings")
             .args([
                 "set",
@@ -636,8 +639,11 @@ fn set_gnome_font_name(font_name: String) {
     });
 }
 
-fn set_gnome_monospace_font_name(font_name: String) {
+fn set_gnome_monospace_font_name(family: String) {
     tokio::spawn(async move {
+        let size = get_gnome_font_size("monospace-font-name").await;
+        let font_name = format!("{family} {size}");
+
         let _res = tokio::process::Command::new("gsettings")
             .args([
                 "set",
@@ -648,6 +654,42 @@ fn set_gnome_monospace_font_name(font_name: String) {
             .status()
             .await;
     });
+}
+
+/// Default size used when no valid size can be read from the current setting.
+/// Matches the defaults of the GNOME `font-name` and `monospace-font-name` keys.
+const DEFAULT_GNOME_FONT_SIZE: &str = "11";
+
+/// Returns the size of the font currently set in the given GNOME font key.
+///
+/// The GNOME font keys expect a full Pango font description that includes a
+/// size (e.g. "Arial 11"), but COSMIC only provides the font family. The
+/// size is therefore preserved from the current value, falling back to the
+/// GNOME default. Writing a bare family name breaks apps like VTE terminals.
+async fn get_gnome_font_size(key: &str) -> String {
+    let current = tokio::process::Command::new("gsettings")
+        .args(["get", "org.gnome.desktop.interface", key])
+        .output()
+        .await
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned());
+
+    current
+        .as_deref()
+        .map(|value| value.trim().trim_matches(['\'', '"']))
+        .and_then(font_description_size)
+        .unwrap_or(DEFAULT_GNOME_FONT_SIZE)
+        .to_owned()
+}
+
+/// Returns the trailing size of a Pango font description, if present.
+/// Accepts point sizes ("11", "10.5") and pixel sizes ("14px").
+fn font_description_size(description: &str) -> Option<&str> {
+    let (_, size) = description.trim().rsplit_once(' ')?;
+    let number = size.strip_suffix("px").unwrap_or(size);
+    let value: f64 = number.parse().ok()?;
+    (value.is_finite() && value > 0.0).then_some(size)
 }
 
 fn set_flatpak_overrides() {
