@@ -664,9 +664,10 @@ const DEFAULT_GNOME_FONT_SIZE: &str = "10.5";
 /// Returns the size of the font currently set in the given GNOME font key.
 ///
 /// The GNOME font keys expect a full Pango font description that includes a
-/// size (e.g. "Arial 11"), but COSMIC only provides the font family. The
-/// size is therefore preserved from the current value, falling back to the
-/// GNOME default. Writing a bare family name breaks apps like VTE terminals.
+/// size (e.g. "Arial 11"), but COSMIC only provides the font family. The size
+/// is therefore preserved from the current value, falling back to the default
+/// of COSMIC font size converted to Pango points. Writing a bare family name
+/// breaks apps like VTE terminals.
 async fn get_gnome_font_size(key: &str) -> String {
     let current = tokio::process::Command::new("gsettings")
         .args(["get", "org.gnome.desktop.interface", key])
