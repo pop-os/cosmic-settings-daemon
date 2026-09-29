@@ -657,8 +657,9 @@ fn set_gnome_monospace_font_name(family: String) {
 }
 
 /// Default size used when no valid size can be read from the current setting.
-/// Matches the defaults of the GNOME `font-name` and `monospace-font-name` keys.
-const DEFAULT_GNOME_FONT_SIZE: &str = "11";
+/// Matches the default Cosmic text/interface font size (14px) converted to
+/// points at 96 DPI.
+const DEFAULT_GNOME_FONT_SIZE: &str = "10.5";
 
 /// Returns the size of the font currently set in the given GNOME font key.
 ///
