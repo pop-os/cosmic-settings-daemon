@@ -8,7 +8,8 @@ pub use device::Device;
 
 pub mod node;
 use intmap::IntMap;
-pub use node::{MediaClass, Node, NodeProps, PlaybackInfo};
+pub use node::{MediaClass, Node, NodeProps, StreamInfo};
+use std::collections::HashMap;
 
 mod profile;
 pub use profile::{Profile, ProfileClass};
@@ -84,6 +85,7 @@ fn run_service(
         default_sink_name: String::new(),
         default_source_name: String::new(),
         nodes: IntMap::new(),
+        node_info_props: IntMap::new(),
         active_routes: IntMap::new(),
         routes: IntMap::new(),
         node_devices: IntMap::new(),
@@ -315,10 +317,27 @@ where
         .info({
             let state = Rc::downgrade(&state);
             move |info| {
-                if let Some(node) = Node::from_node(info)
-                    && let Some(state) = state.upgrade()
-                {
-                    state.borrow_mut().add_node(id, node);
+                let Some(state) = state.upgrade() else {
+                    return;
+                };
+                let mut state = state.borrow_mut();
+
+                // Merge the update props into the accumulated props for this node.
+                if let Some(props) = info.props() {
+                    let entry = state.node_info_props.entry(id).or_default();
+                    for (key, value) in props.iter() {
+                        entry.insert(key.to_owned(), value.to_owned());
+                    }
+                }
+
+                let Some(props) = state.node_info_props.get(id) else {
+                    return;
+                };
+                if let Some(node) = Node::from_props(
+                    props.iter().map(|(k, v)| (k.as_str(), v.as_str())),
+                    info.state(),
+                ) {
+                    state.add_node(id, node);
                 }
             }
         })
@@ -427,7 +446,7 @@ where
                             if let Some(state) = state.upgrade() {
                                 state
                                     .borrow_mut()
-                                    .playback_target(subject, value.map(ToOwned::to_owned));
+                                    .stream_target(subject, value.map(ToOwned::to_owned));
                             }
                         }
 
@@ -508,8 +527,8 @@ pub enum Event {
     DefaultSource(String),
     /// Mono audio node setting changed.
     MonoAudio(bool),
-    /// A playback stream's explicit target object changed.
-    PlaybackTarget(NodeId, Option<String>),
+    /// A stream explicit target object changed.
+    StreamTarget(NodeId, Option<String>),
     /// Emitted when the properties of a node has changed.
     NodeProperties(NodeId, NodeProps),
     /// A device with the given device_id was removed.
@@ -599,6 +618,9 @@ struct State {
     default_sink_name: String,
     /// Associates the pipewire ID of a node to its node and device IDs.
     nodes: IntMap<PipewireId, (NodeId, Option<DeviceId>)>,
+    /// Info updates carry only changed props, they must be merged with
+    /// previously-seen values before parsing a node.
+    node_info_props: IntMap<PipewireId, HashMap<String, String>>,
     /// Routes which are currently in use by devices.
     active_routes: IntMap<DeviceId, Vec<Route>>,
     /// Routes which are supported by devices.
@@ -735,8 +757,8 @@ impl State {
         self.on_event(Event::MonoAudio(enabled))
     }
 
-    fn playback_target(&mut self, id: NodeId, target: Option<String>) {
-        self.on_event(Event::PlaybackTarget(id, target))
+    fn stream_target(&mut self, id: NodeId, target: Option<String>) {
+        self.on_event(Event::StreamTarget(id, target))
     }
 
     fn on_event(&mut self, event: Event) {
@@ -763,6 +785,7 @@ impl State {
     }
 
     fn remove_node(&mut self, id: PipewireId) {
+        self.node_info_props.remove(id);
         if let Some((node_id, _)) = self.nodes.remove(id) {
             self.node_card_profile_device.remove(node_id);
             self.node_devices.remove(node_id);
