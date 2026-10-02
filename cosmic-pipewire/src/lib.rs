@@ -47,19 +47,17 @@ pub fn run(
 ) {
     std::thread::spawn(move || {
         let on_event: Rc<RefCell<dyn FnMut(Event)>> = Rc::new(RefCell::new(on_event));
-        let mut attempt: u32 = 1;
         loop {
             let (request_tx, request_rx) = pipewire::channel::channel();
             on_sender(Sender(request_tx));
             if let Err(why) = run_service(request_rx, Rc::clone(&on_event)) {
-                if let pipewire::Error::CreationFailed = why {
-                    std::thread::sleep(Duration::from_secs(u32::pow(attempt, 2) as u64));
-                    attempt += 1;
-                    continue;
-                }
-                tracing::error!(?why, "failed to run pipewire thread");
+                const RETRY_TIME: u64 = 3;
+                tracing::error!(
+                    ?why,
+                    "pipewire service failed. Retrying in {RETRY_TIME} seconds"
+                );
+                std::thread::sleep(Duration::from_secs(RETRY_TIME));
             }
-            break;
         }
     });
 }
