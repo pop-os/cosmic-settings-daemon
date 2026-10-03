@@ -37,8 +37,7 @@ cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", feat
     "greeter",
 ] }
 cosmic-settings-varlink-server = { path = "./varlink-server" }
-cosmic-theme.export = true
-cosmic-theme.workspace = true
+cosmic-theme = { workspace = true, features = ["export"] }
 ddc-hi = "0.4.1"
 dirs = "6.0.0"
 futures = "0.3.31"
