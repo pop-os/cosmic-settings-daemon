@@ -297,6 +297,31 @@ impl Server {
         });
         Ok(())
     }
+
+    /// Move a recording stream to a source using WirePlumber's linking metadata.
+    pub async fn set_recording_source(
+        &mut self,
+        recording_id: u32,
+        source_id: u32,
+    ) -> Result<(), Error> {
+        let model = self.backend.model.lock().await;
+        if !model.recording_info.contains_key(recording_id) {
+            return Err(Error::InvalidRecording);
+        }
+        let source_serial = model
+            .source_node_serials
+            .get(source_id)
+            .ok_or(Error::InvalidSource)?;
+
+        model.pipewire_send(cosmic_pipewire::Request::SetMetadataProperty {
+            name: "default".to_owned(),
+            subject: recording_id,
+            key: "target.object".to_owned(),
+            type_: Some("Spa:Id".to_owned()),
+            value: Some(source_serial.to_string()),
+        });
+        Ok(())
+    }
 }
 
 fn set_node_mute(
