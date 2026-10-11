@@ -129,34 +129,19 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
 
 /// Get the current workspace assignment configuration
 pub fn workspace_assignments(context: &cosmic_config::Config) -> Vec<WorkspaceAssignment> {
-    // Load custom assignments defined by the user.
-    let custom = context
-        .get::<Vec<WorkspaceAssignment>>("workspace_assignment_custom")
-        .unwrap_or_else(|why| {
-            if why.is_err()
-                && let cosmic_config::Error::GetKey(_, err) = &why
-                && err.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::error!("workspace assignment custom config error: {why}");
-                return Vec::new();
-            }
-            tracing::debug!("workspace assignment custom config not present: {why}");
+    match context.get::<Vec<WorkspaceAssignment>>("workspace_assignment") {
+        Ok(assignments) => assignments,
+        Err(cosmic_config::Error::GetKey(_, err)) if err.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!("workspace assignment config not present: {err}");
             Vec::new()
-        });
-
-    custom
-        .iter()
-        .filter_map(|assignment| {
-            if assignment.enabled {
-                Some(WorkspaceAssignment {
-                    appid: assignment.appid.clone(),
-                    title: assignment.title.clone(),
-                    enabled: true, // Currently unused.
-                    workspace_name: assignment.workspace_name.clone(),
-                })
-            } else {
-                None
-            }
-        })
-        .collect()
+        }
+        Err(why) if why.is_err() => {
+            tracing::error!("workspace assignment config error: {why}");
+            Vec::new()
+        }
+        Err(why) => {
+            tracing::debug!("workspace assignment config not present: {why}");
+            Vec::new()
+        }
+    }
 }
