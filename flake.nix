@@ -35,21 +35,25 @@
           pkgs = pkgsForSystem system;
           rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
           buildInputs = with pkgs; [
-            rustToolchain
-            libxkbcommon
             libinput
-            libpulseaudio.dev
-            pipewire.dev
-            systemd
+            libpulseaudio
             openssl
             udev
+            pipewire
+            libxkbcommon
+            wayland
           ];
 
           nativeBuildInputs = with pkgs; [
+            makeBinaryWrapper
             pkg-config
+            rustPlatform.bindgenHook
+            just
           ];
 
           runtimeDependencies = with pkgs; [
+            wayland
+            libxkbcommon
           ];
         in
         {
@@ -66,10 +70,10 @@
       packages = forAllSystems (
         system:
         let
-          c = commonFor system;
-          rustPlatform = c.pkgs.makeRustPlatform {
-            cargo = c.rustToolchain;
-            rustc = c.rustToolchain;
+          common = commonFor system;
+          rustPlatform = common.pkgs.makeRustPlatform {
+            cargo = common.rustToolchain;
+            rustc = common.rustToolchain;
           };
         in
         {
@@ -78,17 +82,23 @@
             pname = "cosmic-settings-daemon";
             version = "1.m.M-dev";
 
-            src = c.pkgs.lib.fileset.toSource {
+            src = common.pkgs.lib.fileset.toSource {
               root = ./.;
-              fileset = c.pkgs.lib.fileset.unions [
+              fileset = common.pkgs.lib.fileset.unions [
+                ./audio-client
+                ./audio-core
+                ./audio-server
                 ./config
+                ./cosmic-pipewire
                 ./cosmic-settings-daemon-config
                 ./data
                 ./geonames
                 ./src
+                ./varlink-server
                 ./Cargo.toml
                 ./Cargo.lock
-                ./Makefile
+                ./cargo.just
+                ./justfile
               ];
             };
 
@@ -97,20 +107,37 @@
               allowBuiltinFetchGit = true;
             };
 
-            separateDebugInfo = true;
-
-            buildInputs = c.buildInputs;
-            nativeBuildInputs = c.nativeBuildInputs;
-            runtimeDependencies = c.runtimeDependencies;
-
-            makeFlags = [
-              "prefix=${placeholder "out"}"
-              "CARGO_TARGET_DIR=target/${c.pkgs.stdenv.hostPlatform.rust.cargoShortTarget}"
-            ];
-
             dontCargoInstall = true;
 
-            meta = with c.pkgs.lib; {
+            # default recipe missing --target and --profile release already used.
+            dontUseJustBuild = true;
+            dontUseJustCheck = true; # no just test recipe.
+
+            inherit (common) buildInputs nativeBuildInputs;
+
+            separateDebugInfo = true;
+            __structuredAttrs = true;
+
+            justFlags = [
+              "--set"
+              "prefix"
+              (placeholder "out")
+              "--set"
+              "cargo-target-dir"
+              "target/${common.pkgs.stdenv.hostPlatform.rust.cargoShortTarget}"
+            ];
+
+            postFixup = ''
+              wrapProgram $out/bin/cosmic-settings-daemon \
+                --prefix LD_LIBRARY_PATH : ${
+                  common.pkgs.lib.makeLibraryPath [
+                    common.pkgs.wayland
+                    common.pkgs.libxkbcommon
+                  ]
+                }
+            '';
+
+            meta = with common.pkgs.lib; {
               description = "Settings daemon for the COSMIC desktop environment";
               homepage = "https://github.com/pop-os/cosmic-settings-daemon";
               license = licenses.gpl3Only;
@@ -125,19 +152,20 @@
       devShells = forAllSystems (
         system:
         let
-          c = commonFor system;
+          common = commonFor system;
         in
         {
-          default = c.pkgs.mkShell {
+          default = common.pkgs.mkShell {
             inputsFrom = [ self.packages.${system}.cosmic-settings-daemon ];
 
-            packages = with c.pkgs; [
-              c.rustToolchain
+            packages = with common.pkgs; [
+              common.rustToolchain
               rust-analyzer
+              just
             ];
 
-            LD_LIBRARY_PATH = c.pkgs.lib.makeLibraryPath c.runtimeDependencies;
-            RUSTFLAGS = "-C link-arg=-Wl,-rpath,${c.pkgs.lib.makeLibraryPath c.runtimeDependencies}";
+            LD_LIBRARY_PATH = common.pkgs.lib.makeLibraryPath common.runtimeDependencies;
+            RUSTFLAGS = "-C link-arg=-Wl,-rpath,${common.pkgs.lib.makeLibraryPath common.runtimeDependencies}";
 
             shellHook = ''
               echo "COSMIC Settings Daemon development environment"
