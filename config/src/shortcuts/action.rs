@@ -110,6 +110,9 @@ pub enum Action {
     /// Move a window to the given workspace
     SendToWorkspace(u8),
 
+    ///Show or hide desktop
+    ShowDesktop,
+
     /// Swap positions of the active window with another
     SwapWindow,
 
