@@ -178,11 +178,11 @@ impl PartialEq for Binding {
     }
 }
 
-impl ToString for Binding {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for Binding {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut string = String::new();
         self.to_string_in_place(&mut string);
-        string
+        formatter.write_str(&string)
     }
 }
 
@@ -198,7 +198,7 @@ impl FromStr for Binding {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let binding = Binding::from_str_partial(value)?;
-        if binding.key.is_none() && !binding.modifiers.logo {
+        if binding.key.is_none() {
             return Err("no key was defined for this binding".to_string());
         }
 
@@ -206,12 +206,41 @@ impl FromStr for Binding {
     }
 }
 
-fn uppercase_first_letter(input: &str) -> String {
-    let mut chars = input.chars();
-    match chars.next() {
-        None => String::new(),
-        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
-    }
+pub fn is_forbidden_unmodified_keysym(key: xkb::Keysym) -> bool {
+    let raw = key.raw();
+    matches!(raw,
+        0x0041..=0x005a   | // A-Z
+        0x0061..=0x007a   | // a-z
+        0x0030..=0x0039   | // 0-9
+        0x0020            | // Space
+        0xff09            | // Tab
+        0xfe20            | // ISO_Left_Tab
+        0xff89            | // KP_Tab
+        0xff0d            | // Return
+        0xff8d            | // KP_Enter
+        0xff7e            | // Mode_switch
+        0xff14            | // Scroll_Lock
+        0xff15            | // Sys_Req
+        0xff20            | // Multi_key (Compose)
+        0xff7f            | // Num_Lock
+        0xffe5            | // Caps_Lock
+        0xfe01            | // ISO_Lock
+        0xfe08            | // ISO_Next_Group
+        0xfe0a            | // ISO_Prev_Group
+        0xfe0c            | // ISO_First_Group
+        0xfe0e            | // ISO_Last_Group
+        0xfed0..=0xfed2   | // First/Prev/Next_Virtual_Screen
+        0xfed4            | // Last_Virtual_Screen
+        0xfed5            | // Terminate_Server
+        0xfe7a            | // AudibleBell_Enable
+        0x04a1..=0x04df   | // Kana (Japanese)
+        0x05ac..=0x05f2   | // Arabic
+        0x06a1..=0x06ff   | // Cyrillic
+        0x07a1..=0x07f9   | // Greek
+        0x0cdf..=0x0cfa   | // Hebrew
+        0x0da1..=0x0df9   | // Thai
+        0x0ea1..=0x0efa     // Hangul (Korean)
+    )
 }
 
 #[cfg(test)]
@@ -295,41 +324,4 @@ mod tests {
         // At least one key is required.
         assert!(Binding::from_str(" ").is_err());
     }
-}
-
-pub fn is_forbidden_unmodified_keysym(key: xkb::Keysym) -> bool {
-    let raw = key.raw();
-    matches!(raw,
-        0x0041..=0x005a   | // A-Z
-        0x0061..=0x007a   | // a-z
-        0x0030..=0x0039   | // 0-9
-        0x0020            | // Space
-        0xff09            | // Tab
-        0xfe20            | // ISO_Left_Tab
-        0xff89            | // KP_Tab
-        0xff0d            | // Return
-        0xff8d            | // KP_Enter
-        0xff7e            | // Mode_switch
-        0xff14            | // Scroll_Lock
-        0xff15            | // Sys_Req
-        0xff20            | // Multi_key (Compose)
-        0xff7f            | // Num_Lock
-        0xffe5            | // Caps_Lock
-        0xfe01            | // ISO_Lock
-        0xfe08            | // ISO_Next_Group
-        0xfe0a            | // ISO_Prev_Group
-        0xfe0c            | // ISO_First_Group
-        0xfe0e            | // ISO_Last_Group
-        0xfed0..=0xfed2   | // First/Prev/Next_Virtual_Screen
-        0xfed4            | // Last_Virtual_Screen
-        0xfed5            | // Terminate_Server
-        0xfe7a            | // AudibleBell_Enable
-        0x04a1..=0x04df   | // Kana (Japanese)
-        0x05ac..=0x05f2   | // Arabic
-        0x06a1..=0x06ff   | // Cyrillic
-        0x07a1..=0x07f9   | // Greek
-        0x0cdf..=0x0cfa   | // Hebrew
-        0x0da1..=0x0df9   | // Thai
-        0x0ea1..=0x0efa     // Hangul (Korean)
-    )
 }

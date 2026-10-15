@@ -47,16 +47,20 @@ impl Modifiers {
         self.logo = true;
         self
     }
-}
 
-impl std::ops::AddAssign<Modifier> for Modifiers {
-    fn add_assign(&mut self, rhs: Modifier) {
-        match rhs {
+    fn insert(&mut self, modifier: Modifier) {
+        match modifier {
             Modifier::Ctrl => self.ctrl = true,
             Modifier::Alt => self.alt = true,
             Modifier::Shift => self.shift = true,
             Modifier::Super => self.logo = true,
-        };
+        }
+    }
+}
+
+impl std::ops::AddAssign<Modifier> for Modifiers {
+    fn add_assign(&mut self, rhs: Modifier) {
+        self.insert(rhs);
     }
 }
 
@@ -64,8 +68,8 @@ impl std::ops::BitOr for Modifier {
     type Output = Modifiers;
 
     fn bitor(self, rhs: Modifier) -> Self::Output {
-        let mut modifiers = self.into();
-        modifiers += rhs;
+        let mut modifiers: Modifiers = self.into();
+        modifiers.insert(rhs);
         modifiers
     }
 }

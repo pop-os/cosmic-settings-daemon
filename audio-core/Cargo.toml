@@ -12,4 +12,4 @@ serde = { version = "1.0.228", features = ["derive"] }
 
 [dependencies.zlink]
 workspace = true
-features = ["introspection"]
+features = ["introspection", "tracing"]
