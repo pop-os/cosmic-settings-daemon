@@ -70,7 +70,10 @@ impl BrightnessDevice {
                         if displays.is_empty() {
                             guard = brightness_update.condvar.wait(guard).unwrap();
                         } else {
-                            let (g, res) = brightness_update.condvar.wait_timeout(guard, IDLE_TIMEOUT).unwrap();
+                            let (g, res) = brightness_update
+                                .condvar
+                                .wait_timeout(guard, IDLE_TIMEOUT)
+                                .unwrap();
                             guard = g;
                             if res.timed_out() {
                                 // Idle: release the i2c fds so unplugged
@@ -81,7 +84,9 @@ impl BrightnessDevice {
                     }
                 };
 
-                brightness_update.loading.store(true, std::sync::atomic::Ordering::Release);
+                brightness_update
+                    .loading
+                    .store(true, std::sync::atomic::Ordering::Release);
                 cur = brightness;
                 if displays.is_empty() {
                     displays = Display::enumerate();
@@ -95,7 +100,9 @@ impl BrightnessDevice {
                         log::error!("Failed to set brightness: {err:?}");
                     }
                 }
-                brightness_update.loading.store(false, std::sync::atomic::Ordering::Release);
+                brightness_update
+                    .loading
+                    .store(false, std::sync::atomic::Ordering::Release);
             }
         });
 
@@ -127,7 +134,11 @@ impl BrightnessDevice {
         }
 
         if ret.is_err() {
-            if self.brightness_dcc.loading.load(std::sync::atomic::Ordering::Acquire) {
+            if self
+                .brightness_dcc
+                .loading
+                .load(std::sync::atomic::Ordering::Acquire)
+            {
                 return Ok(self.brightness_dcc.brightness.lock().unwrap().0.into());
             }
             for mut d in Display::enumerate() {
