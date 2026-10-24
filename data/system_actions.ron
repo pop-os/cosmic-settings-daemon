@@ -53,6 +53,10 @@
     WindowSwitcher: "cosmic-launcher alt-tab",
     /// Opens the (alt+shift+tab) window switcher
     WindowSwitcherPrevious: "cosmic-launcher shift-alt-tab",
+    /// Opens the (alt+`) window switcher for the focused app's windows
+    WindowSwitcherSameApp: "cosmic-launcher alt-grave",
+    /// Opens the (alt+shift+`) window switcher for the focused app's windows
+    WindowSwitcherSameAppPrevious: "cosmic-launcher shift-alt-grave",
     /// Opens the workspace overview
     WorkspaceOverview: "cosmic-workspaces",
 }

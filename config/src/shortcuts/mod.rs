@@ -269,3 +269,27 @@ impl<'de> Deserialize<'de> for SystemActionsImpl {
         deserializer.deserialize_map(SystemActionsMapVisitor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use action::System;
+
+    // The shipped table is what cosmic-comp spawns from; an entry it can't
+    // parse is skipped with only a log line, so check it here instead.
+    #[test]
+    fn shipped_system_actions_include_same_app_switcher() {
+        let SystemActionsImpl(actions) =
+            ron::from_str(include_str!("../../../data/system_actions.ron")).unwrap();
+
+        assert_eq!(actions[&System::WindowSwitcher], "cosmic-launcher alt-tab");
+        assert_eq!(
+            actions[&System::WindowSwitcherSameApp],
+            "cosmic-launcher alt-grave"
+        );
+        assert_eq!(
+            actions[&System::WindowSwitcherSameAppPrevious],
+            "cosmic-launcher shift-alt-grave"
+        );
+    }
+}

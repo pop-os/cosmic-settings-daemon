@@ -207,6 +207,10 @@ pub enum System {
     WindowSwitcher,
     /// Opens the (alt+shift+tab) window switcher
     WindowSwitcherPrevious,
+    /// Opens the (alt+`) window switcher for the focused app's windows
+    WindowSwitcherSameApp,
+    /// Opens the (alt+shift+`) window switcher for the focused app's windows
+    WindowSwitcherSameAppPrevious,
     /// Opens the workspace overview
     WorkspaceOverview,
 }
