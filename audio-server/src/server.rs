@@ -161,6 +161,10 @@ impl Server {
             return Err(Error::NoActiveSource);
         };
 
+        if model.source_mute {
+            _ = set_node_mute(&mut model, id, false);
+        }
+
         if model.source_volume == 100 {
             return Ok(Volume {
                 id,
@@ -214,6 +218,10 @@ impl Server {
         let Some(id) = model.active_sink_node else {
             return Err(Error::NoActiveSink);
         };
+
+        if model.sink_mute {
+            _ = set_node_mute(&mut model, id, false);
+        }
 
         if model.sink_volume == max_volume {
             return Ok(Volume {
