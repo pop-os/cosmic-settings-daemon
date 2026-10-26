@@ -66,7 +66,7 @@ calloop-wayland-source = "0.4.1"
 
 # For development and testing purposes
 [patch.'https://github.com/pop-os/libcosmic']
-libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "bundles" }
-iced_futures = { git = "https://github.com/pop-os/libcosmic//", branch = "bundles" }
-cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "bundles" }
-cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "bundles" }
+libcosmic = { path = "../libcosmic" }
+iced_futures = { path = "../libcosmic/iced/futures" }
+cosmic-config = { path = "../libcosmic/cosmic-config" }
+cosmic-theme = { path = "../libcosmic/cosmic-theme" }
