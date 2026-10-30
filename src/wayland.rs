@@ -71,9 +71,10 @@ impl AppData {
         if let Some(keyboard) = &self.keyboard
             && let Some(xkb) = xkb_config()
         {
-            let count = xkb.layout.split_terminator(',').count();
-
-            let group = (self.current_layout + 1) % count as u32;
+            let count = xkb.layout.split_terminator(',').count() as u32;
+            let Some(group) = (self.current_layout + 1).checked_rem(count) else {
+                return;
+            };
             keyboard.keyboard_layout.set_group(group);
             self.current_layout = group;
         }
