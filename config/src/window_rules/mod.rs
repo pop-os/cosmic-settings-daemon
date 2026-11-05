@@ -35,12 +35,21 @@ pub struct PreciseApplicationException {
     pub enabled: bool,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct WorkspaceAssignment {
+    pub appid: String,
+    pub title: String,
+    pub enabled: bool,
+    pub workspace_name: String,
+}
+
 // cosmic-config configuration state for `com.system76.CosmicSettings.WindowRules`
 #[derive(Clone, Debug, Default, PartialEq, CosmicConfigEntry)]
 #[version = 1]
 pub struct Config {
     pub tiling_exception_defaults: Vec<DefaultApplicationException>,
     pub tiling_exception_custom: Vec<PreciseApplicationException>,
+    pub workspace_assignment: Vec<WorkspaceAssignment>,
 }
 
 impl Config {
@@ -116,4 +125,23 @@ pub fn tiling_exceptions(context: &cosmic_config::Config) -> Vec<ApplicationExce
             }
         })
         .collect()
+}
+
+/// Get the current workspace assignment configuration
+pub fn workspace_assignments(context: &cosmic_config::Config) -> Vec<WorkspaceAssignment> {
+    match context.get::<Vec<WorkspaceAssignment>>("workspace_assignment") {
+        Ok(assignments) => assignments,
+        Err(cosmic_config::Error::GetKey(_, err)) if err.kind() == std::io::ErrorKind::NotFound => {
+            tracing::debug!("workspace assignment config not present: {err}");
+            Vec::new()
+        }
+        Err(why) if why.is_err() => {
+            tracing::error!("workspace assignment config error: {why}");
+            Vec::new()
+        }
+        Err(why) => {
+            tracing::debug!("workspace assignment config not present: {why}");
+            Vec::new()
+        }
+    }
 }
