@@ -9,6 +9,7 @@ use notify::event::ModifyKind;
 use notify::{EventKind, Watcher};
 use std::collections::{HashMap, HashSet};
 use std::io;
+use std::num::NonZeroUsize;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -26,8 +27,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use zbus::names::{MemberName, UniqueName, WellKnownName};
 use zbus::object_server::SignalEmitter;
-use zbus::zvariant::ObjectPath;
-use zbus::{Connection, MatchRule, MessageStream};
+use zbus::{Connection, MatchRule, MessageStream, ObjectPath};
 mod battery;
 mod brightness_device;
 mod greeter;
@@ -54,7 +54,7 @@ struct SettingsDaemon {
     /// Directly access varlink daemon methods within the DBus daemon.
     varlink_daemon: Arc<tokio::sync::Mutex<cosmic_settings_varlink_server::DaemonInner>>,
     logind_session: Option<LogindSessionProxy<'static>>,
-    a11y_session: Option<Mutex<cosmic_dbus_a11y::StatusProxy<'static>>>,
+    a11y_session: Option<Mutex<a11y_zbus::StatusProxy<'static>>>,
     display_brightness_device: BrightnessDevice,
     #[allow(clippy::type_complexity)]
     watched_configs: Arc<
@@ -331,9 +331,9 @@ impl SettingsDaemon {
         }
         let path = config.path(id, version);
         let name = config.name(id, version);
-        let conn = zbus::connection::Builder::session()?
-            .name(name.as_str())?
-            .serve_at(path.to_owned(), config)?
+        let conn = zbus::connection::Builder::session()
+            .name(name.as_str())
+            .serve_at(path.to_owned(), config)
             .build()
             .await?;
 
@@ -526,9 +526,7 @@ async fn main() -> ExitCode {
 
             let a11y_session = async {
                 let connection = zbus::Connection::session().await?;
-                cosmic_dbus_a11y::StatusProxy::builder(&connection)
-                    .build()
-                    .await
+                a11y_zbus::StatusProxy::builder(&connection).build().await
             }
             .await;
             let xdg_config = dirs::config_dir()
@@ -623,9 +621,9 @@ async fn main() -> ExitCode {
                 wayland_sender: wayland::run(),
             };
 
-            let connection = zbus::connection::Builder::session()?
-                .name(DBUS_NAME)?
-                .serve_at(DBUS_PATH, settings_daemon)?
+            let connection = zbus::connection::Builder::session()
+                .name(DBUS_NAME)
+                .serve_at(DBUS_PATH, settings_daemon)
                 .build()
                 .await?;
 
@@ -813,34 +811,36 @@ async fn watch_config_message_stream(
 ) -> zbus::Result<()> {
     let config_rule = MatchRule::builder()
         .msg_type(zbus::message::Type::MethodCall)
-        .member("WatchConfig")?
-        .interface("com.system76.CosmicSettingsDaemon")?
-        .build();
-    let config_stream = MessageStream::for_match_rule(config_rule, &conn, Some(100)).await?;
+        .member("WatchConfig")
+        .interface("com.system76.CosmicSettingsDaemon")
+        .build()?;
+    let config_stream =
+        MessageStream::for_match_rule(config_rule, &conn, NonZeroUsize::new(100)).await?;
 
     let mut watched_config_names: HashMap<(String, u64), HashSet<UniqueName<'static>>> =
         HashMap::new();
 
     let state_rule = MatchRule::builder()
         .msg_type(zbus::message::Type::MethodCall)
-        .member("WatchState")?
-        .interface("com.system76.CosmicSettingsDaemon")?
-        .build();
-    let state_stream = MessageStream::for_match_rule(state_rule, &conn, Some(100)).await?;
+        .member("WatchState")
+        .interface("com.system76.CosmicSettingsDaemon")
+        .build()?;
+    let state_stream =
+        MessageStream::for_match_rule(state_rule, &conn, NonZeroUsize::new(100)).await?;
 
     let mut watched_state_names: HashMap<(String, u64), HashSet<UniqueName<'static>>> =
         HashMap::new();
 
     let name_changed_rule = MatchRule::builder()
         .msg_type(zbus::message::Type::Signal)
-        .sender("org.freedesktop.DBus")?
-        .member("NameOwnerChanged")?
-        .interface("org.freedesktop.DBus")?
-        .arg(2, "")? // new owner is empty
-        .build();
+        .sender("org.freedesktop.DBus")
+        .member("NameOwnerChanged")
+        .interface("org.freedesktop.DBus")
+        .arg(2, "") // new owner is empty
+        .build()?;
 
     let name_changed_stream =
-        MessageStream::for_match_rule(name_changed_rule, &conn, Some(100)).await?;
+        MessageStream::for_match_rule(name_changed_rule, &conn, NonZeroUsize::new(100)).await?;
 
     let mut rx = name_changed_stream.merge(config_stream).merge(state_stream);
 

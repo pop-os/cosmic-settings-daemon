@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio_stream::StreamExt;
-use upower_dbus::{BatteryLevel, BatteryType, UPowerProxy};
+use upower_zbus::{BatteryLevel, BatteryType, DeviceProxy, UPowerProxy};
 
 pub type OnBatteryFn = Box<dyn Fn(bool) -> Pin<Box<dyn Future<Output = bool>>>>;
 
@@ -31,7 +31,7 @@ async fn watch_battery_plug_events(
 
     let mut line_power_devices = Vec::new();
     for path in line_power_paths {
-        if let Ok(device) = upower_dbus::DeviceProxy::new(conn, path).await {
+        if let Ok(device) = DeviceProxy::new(conn, path).await {
             line_power_devices.push(device);
         }
     }
@@ -91,7 +91,7 @@ async fn watch_battery_plug_events(
 }
 
 /// Whether any line power device reports being online.
-async fn any_line_power_online(devices: &[upower_dbus::DeviceProxy<'static>]) -> bool {
+async fn any_line_power_online(devices: &[DeviceProxy<'static>]) -> bool {
     for device in devices {
         if let Ok(true) = device.online().await {
             return true;
@@ -106,7 +106,7 @@ pub async fn low_power_monitor() {
         return;
     };
 
-    let Ok(upower) = upower_dbus::UPowerProxy::new(&conn).await else {
+    let Ok(upower) = UPowerProxy::new(&conn).await else {
         return;
     };
 

@@ -81,16 +81,9 @@ pub async fn watch_time_changes() -> anyhow::Result<(
             let conn = conn.clone();
             let tx = tx.clone();
             tokio::task::spawn_local(async move {
-                let builder = match PropertiesProxy::builder(&conn)
+                let builder = PropertiesProxy::builder(&conn)
                     .destination("org.freedesktop.timedate1")
-                    .and_then(|b| b.path("/org/freedesktop/timedate1"))
-                {
-                    Ok(builder) => builder,
-                    Err(err) => {
-                        log::warn!("Failed to build timedate1 Properties proxy: {err:?}");
-                        return;
-                    }
-                };
+                    .path("/org/freedesktop/timedate1");
 
                 let proxy = match builder.build().await {
                     Ok(proxy) => proxy,
