@@ -37,8 +37,8 @@ impl Daemon {
     pub async fn run(self) {
         let socket_path = socket_path();
         let _ = tokio::fs::remove_file(&socket_path).await;
-        let listener =
-            zlink::unix::bind(&socket_path).expect("zlink service failed to bind unix socket");
+        let listener = zlink::tokio::unix::bind(&socket_path)
+            .expect("zlink service failed to bind unix socket");
 
         if let Err(why) = zlink::Server::new(listener, self).run().await {
             tracing::error!("zlink service failed: {}", why);

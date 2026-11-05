@@ -6,6 +6,6 @@ publish = false
 
 [dependencies]
 bitcode = "0.6"
-reqwest = "0.12"
-tokio = { version = "1.47", features = ["full"] }
-zip = "5"
+reqwest = "0.13"
+tokio = { version = "1.54", features = ["full"] }
+zip = "9"

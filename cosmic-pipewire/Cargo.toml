@@ -9,9 +9,9 @@ publish = true
 [dependencies]
 float-cmp = "0.10.0"
 intmap = "3.1.3"
-libspa = "0.10.0"
-libspa-sys = "0.10.0"
-pipewire = "0.10.0"
-serde = { version = "1.0.228", features = ["derive"]}
-serde_json = "1.0.149"
+libspa = "0.10.1"
+libspa-sys = "0.10.1"
+pipewire = "0.10.1"
+serde = { version = "1.0.229", features = ["derive"]}
+serde_json = "1.0.154"
 tracing = "0.1.44"

@@ -12,14 +12,14 @@ use std::os::fd::OwnedFd;
 use std::path::PathBuf;
 
 pub async fn connect() -> zlink::Result<Client> {
-    zlink::unix::connect(socket_path())
+    zlink::tokio::unix::connect(socket_path())
         .await
         .map(|conn| Client { conn })
 }
 
 #[derive(Debug)]
 pub struct Client {
-    pub conn: Connection<zlink::unix::Stream>,
+    pub conn: Connection<zlink::tokio::unix::Stream>,
 }
 
 impl Client {
