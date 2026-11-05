@@ -11,7 +11,7 @@ pub const COSMIC_COMP_XDG_KEY: &str = "xkb_config";
 
 pub async fn sync_locale1(mut rx: Receiver<()>) -> anyhow::Result<()> {
     let conn = zbus::Connection::system().await?;
-    let proxy = locale1::locale1Proxy::new(&conn).await?;
+    let proxy = locale1_zbus::locale1Proxy::new(&conn).await?;
     let config = cosmic_config::Config::new(COSMIC_COMP_ID, 1)
         .context("Found no cosmic-comp configuration")?;
 
@@ -61,7 +61,7 @@ pub async fn sync_locale1(mut rx: Receiver<()>) -> anyhow::Result<()> {
 
 async fn sync_cosmic_to_locale1(
     config: &cosmic_config::Config,
-    proxy: &locale1::locale1Proxy<'_>,
+    proxy: &locale1_zbus::locale1Proxy<'_>,
 ) -> anyhow::Result<()> {
     let xkb_config = config
         .get::<XkbConfig>(COSMIC_COMP_XDG_KEY)
@@ -83,7 +83,7 @@ async fn sync_cosmic_to_locale1(
 
 async fn sync_locale1_to_cosmic(
     config: &cosmic_config::Config,
-    proxy: &locale1::locale1Proxy<'_>,
+    proxy: &locale1_zbus::locale1Proxy<'_>,
 ) -> anyhow::Result<()> {
     let (model, layout, variant, options) = futures_util::try_join!(
         proxy.x11model(),

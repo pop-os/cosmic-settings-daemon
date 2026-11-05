@@ -1,7 +1,7 @@
 use std::time::Duration;
 
+use a11y_zbus::*;
 use cosmic_config::CosmicConfigEntry;
-use cosmic_dbus_a11y::*;
 use cosmic_settings_daemon_config::greeter;
 
 pub fn sync_with_greeter() -> anyhow::Result<()> {
