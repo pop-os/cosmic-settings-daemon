@@ -6,9 +6,9 @@ license = "MPL-2.0"
 publish = true
 
 [dependencies]
-dirs = "6.0.0"
-ron = "0.12.0"
-serde = { version = "1.0.228", features = ["derive"] }
+dirs = "7.0.0"
+ron = "0.12"
+serde = { version = "1.0.229", features = ["derive"] }
 
 [dependencies.zlink]
 workspace = true
