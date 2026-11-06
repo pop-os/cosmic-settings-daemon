@@ -802,14 +802,14 @@ async fn main() -> ExitCode {
     })
 }
 
+type WatchKey = (String, u64);
+type WatchTarget = (Connection, ObjectPath<'static>, WellKnownName<'static>);
+type WatchTargets = Arc<RwLock<HashMap<WatchKey, WatchTarget>>>;
+
 async fn watch_config_message_stream(
     conn: Connection,
-    watched_configs: Arc<
-        RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
-    >,
-    watched_states: Arc<
-        RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
-    >,
+    watched_configs: WatchTargets,
+    watched_states: WatchTargets,
 ) -> zbus::Result<()> {
     let config_rule = MatchRule::builder()
         .msg_type(zbus::message::Type::MethodCall)
