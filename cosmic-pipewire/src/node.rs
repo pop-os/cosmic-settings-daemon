@@ -25,12 +25,12 @@ pub struct Node {
     pub icon_name: String,
     pub media_class: MediaClass,
     pub node_name: String,
-    pub playback: Option<PlaybackInfo>,
+    pub stream: Option<StreamInfo>,
     pub state: State,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct PlaybackInfo {
+pub struct StreamInfo {
     pub application_id: Option<String>,
     pub application_name: Option<String>,
     pub icon_name: Option<String>,
@@ -46,19 +46,33 @@ pub enum State {
     Error(String),
 }
 
+impl From<NodeState<'_>> for State {
+    fn from(node_state: NodeState) -> Self {
+        match node_state {
+            NodeState::Idle => State::Idle,
+            NodeState::Running => State::Running,
+            NodeState::Creating => State::Creating,
+            NodeState::Suspended => State::Suspended,
+            NodeState::Error(why) => State::Error(why.to_owned()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaClass {
     Source,
     Sink,
     Playback,
+    Record,
 }
 
 impl Node {
-    /// Attains process info from a pipewire info node.
+    /// Attains node info from a props iterator and a node state.
     #[must_use]
-    pub fn from_node(info: &NodeInfoRef) -> Option<Self> {
-        let props = info.props()?;
-
+    pub fn from_props<'a>(
+        props: impl Iterator<Item = (&'a str, &'a str)>,
+        node_state: NodeState,
+    ) -> Option<Self> {
         let mut audio_channels = 1;
         let mut audio_position = String::new();
         let mut application_id = None;
@@ -76,7 +90,7 @@ impl Node {
         let mut object_id = None;
         let mut object_serial = None;
 
-        for (entry, value) in props.iter() {
+        for (entry, value) in props {
             match entry {
                 "device.id" => device_id = value.parse::<u32>().ok(),
                 "object.id" => object_id = Some(value.parse::<u32>().ok()?),
@@ -110,6 +124,7 @@ impl Node {
                         "Audio/Sink" => MediaClass::Sink,
                         "Audio/Source" => MediaClass::Source,
                         "Stream/Output/Audio" => MediaClass::Playback,
+                        "Stream/Input/Audio" => MediaClass::Record,
                         _ => return None,
                     })
                 }
@@ -126,12 +141,14 @@ impl Node {
         }
 
         let media_class = media_class?;
-        let playback = matches!(media_class, MediaClass::Playback).then_some(PlaybackInfo {
-            application_id,
-            application_name,
-            icon_name: application_icon_name,
-            media_name,
-        });
+        let stream = matches!(media_class, MediaClass::Playback | MediaClass::Record).then_some(
+            StreamInfo {
+                application_id,
+                application_name,
+                icon_name: application_icon_name,
+                media_name,
+            },
+        );
 
         let device = Node {
             object_id: object_id?,
@@ -154,17 +171,17 @@ impl Node {
             audio_channels,
             audio_position,
             node_name,
-            playback,
-            state: match info.state() {
-                NodeState::Idle => State::Idle,
-                NodeState::Running => State::Running,
-                NodeState::Creating => State::Creating,
-                NodeState::Suspended => State::Suspended,
-                NodeState::Error(why) => State::Error(why.to_owned()),
-            },
+            stream,
+            state: node_state.into(),
         };
 
         Some(device)
+    }
+
+    #[must_use]
+    pub fn from_node(info: &NodeInfoRef) -> Option<Self> {
+        let props = info.props()?;
+        Self::from_props(props.iter(), info.state())
     }
 }
 
