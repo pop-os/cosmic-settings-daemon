@@ -157,12 +157,16 @@ pub async fn watch_theme(
     };
 
     set_gnome_button_layout(tk.show_maximize, tk.show_minimize);
-    set_gnome_icon_theme(tk.icon_theme.clone());
-    set_gnome_font_name(tk.interface_font.family.clone(), "font-name");
-    set_gnome_font_name(tk.monospace_font.family.clone(), "monospace-font-name");
 
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
+
+    let theme = load_theme(if theme_mode.is_dark {
+        &dark_helper
+    } else {
+        &light_helper
+    });
+    set_gnome_theme_look(&theme);
 
     if tk.apply_theme_global {
         // Write the exports for both themes in case they have changed in the meantime
@@ -262,21 +266,14 @@ pub async fn watch_theme(
                             }
                         }
 
-                        if tk.apply_theme_global {
-                            let theme = match if theme_mode.is_dark {
-                                Theme::get_entry(&dark_helper)
-                            } else {
-                                Theme::get_entry(&light_helper)
-                            } {
-                                Ok(t) => t,
-                                Err((errs, t)) => {
-                                    for err in errs {
-                                        log::error!("{err}");
-                                    }
-                                    t
-                                }
-                            };
+                        let theme = load_theme(if theme_mode.is_dark {
+                            &dark_helper
+                        } else {
+                            &light_helper
+                        });
+                        set_gnome_theme_look(&theme);
 
+                        if tk.apply_theme_global {
                             if let Err(err) = theme.apply_exports() {
                                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
@@ -289,18 +286,6 @@ pub async fn watch_theme(
 
                         for err in errs {
                             log::error!("Error updating the theme toolkit config {err:?}");
-                        }
-
-                        if changes.contains(&"icon_theme") {
-                            set_gnome_icon_theme(tk.icon_theme.clone());
-                        }
-
-                        if changes.contains(&"interface_font") {
-                            set_gnome_font_name(tk.interface_font.family.clone(), "font-name");
-                        }
-
-                        if changes.contains(&"monospace_font") {
-                            set_gnome_font_name(tk.monospace_font.family.clone(), "monospace-font-name");
                         }
 
                         if changes.contains(&"show_maximize") || changes.contains(&"show_minimize") {
@@ -359,6 +344,9 @@ pub async fn watch_theme(
                                     t
                                 },
                             };
+                        if theme_mode.is_dark == is_dark {
+                            set_gnome_theme_look(&t);
+                        }
                         if tk.apply_theme_global {
                             if let Err(err) = t.write_exports() {
                                 log::error!("Failed to write COSMIC theme exports. {err:?}");
@@ -397,6 +385,11 @@ pub async fn watch_theme(
                 if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
                     log::error!("Failed to update theme mode {err:?}");
                 }
+                set_gnome_theme_look(&load_theme(if theme_mode.is_dark {
+                    &dark_helper
+                } else {
+                    &light_helper
+                }));
                 if tk.apply_theme_global {
                     let theme = match if theme_mode.is_dark {
                         Theme::get_entry(&dark_helper)
@@ -460,6 +453,11 @@ pub async fn watch_theme(
                 if let Err(err) = theme_mode.set_is_dark(&helper, is_dark) {
                     log::error!("Failed to update theme mode {err:?}");
                 }
+                set_gnome_theme_look(&load_theme(if theme_mode.is_dark {
+                    &dark_helper
+                } else {
+                    &light_helper
+                }));
                 if tk.apply_theme_global {
                     let theme = match if theme_mode.is_dark {
                         Theme::get_entry(&dark_helper)
@@ -527,6 +525,11 @@ pub async fn watch_theme(
                         continue;
                     }
 
+                    set_gnome_theme_look(&load_theme(if theme_mode.is_dark {
+                        &dark_helper
+                    } else {
+                        &light_helper
+                    }));
                     if tk.apply_theme_global {
                         let theme = match if theme_mode.is_dark {
                             Theme::get_entry(&dark_helper)
@@ -552,6 +555,24 @@ pub async fn watch_theme(
 
         }
     }
+}
+
+fn load_theme(helper: &cosmic_config::Config) -> Theme {
+    match Theme::get_entry(helper) {
+        Ok(theme) => theme,
+        Err((errs, theme)) => {
+            for why in errs {
+                log::error!("{why}");
+            }
+            theme
+        }
+    }
+}
+
+fn set_gnome_theme_look(theme: &Theme) {
+    set_gnome_icon_theme(theme.icon_theme.clone());
+    set_gnome_font_name(theme.font.family.clone(), "font-name");
+    set_gnome_font_name(theme.mono_font.family.clone(), "monospace-font-name");
 }
 
 fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {
