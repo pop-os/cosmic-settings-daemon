@@ -46,18 +46,17 @@ pub fn run(
     mut on_sender: impl FnMut(Sender) + Send + 'static,
 ) {
     std::thread::spawn(move || {
+        const RETRY_TIME: u64 = 3;
         let on_event: Rc<RefCell<dyn FnMut(Event)>> = Rc::new(RefCell::new(on_event));
         loop {
             let (request_tx, request_rx) = pipewire::channel::channel();
             on_sender(Sender(request_tx));
             if let Err(why) = run_service(request_rx, Rc::clone(&on_event)) {
-                const RETRY_TIME: u64 = 3;
-                tracing::error!(
-                    ?why,
-                    "pipewire service failed. Retrying in {RETRY_TIME} seconds"
-                );
-                std::thread::sleep(Duration::from_secs(RETRY_TIME));
+                tracing::error!("pipewire service exited in error: {why}");
             }
+
+            tracing::debug!("pipewire service disconnected. Retrying in {RETRY_TIME} seconds");
+            std::thread::sleep(Duration::from_secs(RETRY_TIME));
         }
     });
 }
@@ -70,6 +69,22 @@ fn run_service(
     let main_loop = pipewire::main_loop::MainLoopRc::new(None)?;
     let context = pipewire::context::ContextRc::new(&main_loop, None)?;
     let core = context.connect_rc(None)?;
+
+    // Watch for pipewire connection drops and quit the main loop when so.
+    let main_loop_weak = main_loop.downgrade();
+    let _listener = core
+        .add_listener_local()
+        .error(move |id, _seq, res, _message| {
+            const BROKEN_PIPE: i32 = -32;
+            if id == 0
+                && res == BROKEN_PIPE
+                && let Some(main_loop) = main_loop_weak.upgrade()
+            {
+                main_loop.quit();
+            }
+        })
+        .register();
+
     let registry = core.get_registry_rc()?;
 
     let state = Rc::new(RefCell::new(State {
@@ -161,7 +176,6 @@ fn run_service(
     });
 
     let registry_weak = registry.downgrade();
-
     let _registry_listener = registry
         .add_listener_local()
         .global(move |obj| {
