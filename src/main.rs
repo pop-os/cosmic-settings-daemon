@@ -710,6 +710,10 @@ async fn main() -> ExitCode {
                                 if let Err(err) = xkb_tx.send(()).await {
                                     log::error!("Failed to send xkb layout update: {err:?}");
                                 }
+                            } else if id.as_str() == locale::COSMIC_COMP_ID
+                                && key.as_str() == theme::COSMIC_COMP_CURSOR_SIZE_KEY
+                            {
+                                theme::sync_gnome_cursor_size();
                             } else if id.as_str() == cosmic_settings_daemon_config::NAME {
                                 let mut daemon = varlink_daemon_context.lock().await;
 
