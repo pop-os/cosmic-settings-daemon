@@ -167,7 +167,6 @@ pub async fn watch_theme(
         &light_helper
     });
     set_gnome_theme_look(&theme);
-    sync_gnome_cursor_size();
 
     if tk.apply_theme_global {
         // Write the exports for both themes in case they have changed in the meantime
@@ -572,30 +571,34 @@ fn load_theme(helper: &cosmic_config::Config) -> Theme {
 
 fn set_gnome_theme_look(theme: &Theme) {
     set_gnome_icon_theme(theme.icon_theme.clone());
+    sync_gnome_cursor();
     set_gnome_font_name(theme.font.family.clone(), "font-name");
     set_gnome_font_name(theme.mono_font.family.clone(), "monospace-font-name");
 }
 
-/// Mirror cosmic-comp's `cursor_size` to GTK, for apps that draw their own cursor.
-pub fn sync_gnome_cursor_size() {
+/// Mirror the cursor theme and cosmic-comp's `cursor_size` to GTK, for apps that draw their own cursor.
+pub fn sync_gnome_cursor() {
+    let theme = Theme::get_active().unwrap_or_else(|(_, theme)| theme).cursor_theme;
     let size = cosmic_config::Config::new(crate::locale::COSMIC_COMP_ID, 1)
         .ok()
         .and_then(|config| config.get::<Option<u32>>(COSMIC_COMP_CURSOR_SIZE_KEY).ok())
-        .flatten();
+        .flatten()
+        .map(|size| size.to_string());
 
-    tokio::spawn(async move {
-        let size = size.map(|size| size.to_string());
-        // `None` resets to the session default.
-        let args = match &size {
-            Some(size) => vec!["set", "org.gnome.desktop.interface", "cursor-size", size],
-            None => vec!["reset", "org.gnome.desktop.interface", "cursor-size"],
-        };
+    for (key, value) in [("cursor-theme", theme), ("cursor-size", size)] {
+        tokio::spawn(async move {
+            // `None` resets to the session default.
+            let args = match &value {
+                Some(value) => vec!["set", "org.gnome.desktop.interface", key, value],
+                None => vec!["reset", "org.gnome.desktop.interface", key],
+            };
 
-        let _res = tokio::process::Command::new("gsettings")
-            .args(args)
-            .status()
-            .await;
-    });
+            let _res = tokio::process::Command::new("gsettings")
+                .args(args)
+                .status()
+                .await;
+        });
+    }
 }
 
 pub const COSMIC_COMP_CURSOR_SIZE_KEY: &str = "cursor_size";

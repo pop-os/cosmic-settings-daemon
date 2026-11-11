@@ -713,7 +713,7 @@ async fn main() -> ExitCode {
                             } else if id.as_str() == locale::COSMIC_COMP_ID
                                 && key.as_str() == theme::COSMIC_COMP_CURSOR_SIZE_KEY
                             {
-                                theme::sync_gnome_cursor_size();
+                                theme::sync_gnome_cursor();
                             } else if id.as_str() == cosmic_settings_daemon_config::NAME {
                                 let mut daemon = varlink_daemon_context.lock().await;
 
