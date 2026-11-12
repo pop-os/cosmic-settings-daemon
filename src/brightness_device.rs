@@ -4,6 +4,7 @@ use std::io;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tokio::sync::oneshot;
 use tokio::{fs, time};
 
 use crate::LogindSessionProxy;
@@ -14,8 +15,10 @@ fn invalid_data<E: Error + Send + Sync + 'static>(err: E) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, err)
 }
 
+type ReadRequest = oneshot::Sender<Option<u32>>;
+
 struct DdcThread {
-    brightness: Mutex<(u16, bool)>,
+    brightness: Mutex<(u16, bool, Vec<ReadRequest>)>,
     condvar: std::sync::Condvar,
     loading: std::sync::atomic::AtomicBool,
 }
@@ -29,8 +32,7 @@ pub struct BrightnessDevice {
 
 impl Drop for BrightnessDevice {
     fn drop(&mut self) {
-        let mut g = self.brightness_dcc.brightness.lock().unwrap();
-        *g = (g.0, true);
+        self.brightness_dcc.brightness.lock().unwrap().1 = true;
 
         self.brightness_dcc.condvar.notify_all();
     }
@@ -39,7 +41,7 @@ impl Drop for BrightnessDevice {
 impl BrightnessDevice {
     pub fn external() -> Self {
         let brightness_update: Arc<DdcThread> = Arc::new(DdcThread {
-            brightness: Mutex::new((100u16, false)),
+            brightness: Mutex::new((100u16, false, Vec::new())),
             condvar: std::sync::Condvar::new(),
             loading: false.into(),
         });
@@ -59,13 +61,16 @@ impl BrightnessDevice {
             let mut displays: Vec<Display> = Vec::new();
             let mut cur = 100;
             'outer: loop {
-                let brightness = {
+                let (brightness, reads) = {
                     let mut guard = brightness_update.brightness.lock().unwrap();
                     loop {
-                        match *guard {
-                            (_, true) => break 'outer,
-                            (b, _) if b != cur => break b,
-                            (_, _) => {}
+                        match &mut *guard {
+                            (_, true, _) => break 'outer,
+                            (b, _, _) if *b != cur => break (*b, Vec::new()),
+                            (_, _, reads) if !reads.is_empty() => {
+                                break (cur, std::mem::take(reads));
+                            }
+                            _ => {}
                         }
                         if displays.is_empty() {
                             guard = brightness_update.condvar.wait(guard).unwrap();
@@ -80,6 +85,21 @@ impl BrightnessDevice {
                         }
                     }
                 };
+
+                if !reads.is_empty() {
+                    if displays.is_empty() {
+                        displays = Display::enumerate();
+                    }
+                    let value = displays.iter_mut().find_map(|d| {
+                        d.update_capabilities().ok()?;
+                        let feature = d.info.mccs_database.get(BRIGHTNESS)?;
+                        Some(d.handle.get_vcp_feature(feature.code).ok()?.value() as u32)
+                    });
+                    for read in reads {
+                        _ = read.send(value);
+                    }
+                    continue;
+                }
 
                 brightness_update.loading.store(true, std::sync::atomic::Ordering::Release);
                 cur = brightness;
@@ -130,16 +150,17 @@ impl BrightnessDevice {
             if self.brightness_dcc.loading.load(std::sync::atomic::Ordering::Acquire) {
                 return Ok(self.brightness_dcc.brightness.lock().unwrap().0.into());
             }
-            for mut d in Display::enumerate() {
-                if d.update_capabilities().is_err() {
-                    continue;
-                }
-
-                if let Some(feature) = d.info.mccs_database.get(BRIGHTNESS)
-                    && let Ok(value) = d.handle.get_vcp_feature(feature.code)
-                {
-                    return Ok(value.value() as u32);
-                }
+            let (tx, rx) = oneshot::channel();
+            {
+                let mut g = self.brightness_dcc.brightness.lock().unwrap();
+                g.2.retain(|read| !read.is_closed());
+                g.2.push(tx);
+            }
+            self.brightness_dcc.condvar.notify_all();
+            match time::timeout(Duration::from_secs(10), rx).await {
+                Ok(Ok(Some(value))) => return Ok(value),
+                Err(_) => return Ok(self.brightness_dcc.brightness.lock().unwrap().0.into()),
+                Ok(_) => {}
             }
         }
         ret
@@ -249,10 +270,7 @@ impl BrightnessDevice {
         let clamped = value.clamp(self.min_brightness(), self.max_brightness.unwrap_or(100));
 
         let b_dcc = (clamped * 100 / self.max_brightness.unwrap_or(100)) as u16;
-        {
-            let mut g = self.brightness_dcc.brightness.lock().unwrap();
-            *g = (b_dcc, g.1);
-        }
+        self.brightness_dcc.brightness.lock().unwrap().0 = b_dcc;
 
         self.brightness_dcc.condvar.notify_all();
 
