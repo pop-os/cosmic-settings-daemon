@@ -10,7 +10,7 @@ use anyhow::bail;
 use chrono::{DateTime, Days, Local};
 use cosmic::config::CosmicTk;
 use cosmic::theme::CosmicTheme;
-use cosmic_config::CosmicConfigEntry;
+use cosmic_config::{ConfigGet, CosmicConfigEntry};
 use cosmic_theme::{Theme, ThemeMode};
 
 use geonames::GeoPosition;
@@ -571,9 +571,37 @@ fn load_theme(helper: &cosmic_config::Config) -> Theme {
 
 fn set_gnome_theme_look(theme: &Theme) {
     set_gnome_icon_theme(theme.icon_theme.clone());
+    sync_gnome_cursor();
     set_gnome_font_name(theme.font.family.clone(), "font-name");
     set_gnome_font_name(theme.mono_font.family.clone(), "monospace-font-name");
 }
+
+/// Mirror the cursor theme and cosmic-comp's `cursor_size` to GTK, for apps that draw their own cursor.
+pub fn sync_gnome_cursor() {
+    let theme = Theme::get_active().unwrap_or_else(|(_, theme)| theme).cursor_theme;
+    let size = cosmic_config::Config::new(crate::locale::COSMIC_COMP_ID, 1)
+        .ok()
+        .and_then(|config| config.get::<Option<u32>>(COSMIC_COMP_CURSOR_SIZE_KEY).ok())
+        .flatten()
+        .map(|size| size.to_string());
+
+    for (key, value) in [("cursor-theme", theme), ("cursor-size", size)] {
+        tokio::spawn(async move {
+            // `None` resets to the session default.
+            let args = match &value {
+                Some(value) => vec!["set", "org.gnome.desktop.interface", key, value],
+                None => vec!["reset", "org.gnome.desktop.interface", key],
+            };
+
+            let _res = tokio::process::Command::new("gsettings")
+                .args(args)
+                .status()
+                .await;
+        });
+    }
+}
+
+pub const COSMIC_COMP_CURSOR_SIZE_KEY: &str = "cursor_size";
 
 fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {
     tokio::spawn(async move {
