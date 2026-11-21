@@ -74,6 +74,8 @@ pub struct Model {
     pub sink_node_serials: IntMap<NodeId, u64>,
     /// Node IDs for sources
     source_node_ids: Vec<NodeId>,
+    /// PipeWire object serials for source nodes.
+    pub source_node_serials: IntMap<NodeId, u64>,
 
     /** Playback stream information */
 
@@ -83,6 +85,12 @@ pub struct Model {
     playback_targets: IntMap<NodeId, String>,
     /// Resolved sink node IDs for playback streams with explicit targets.
     playback_sink_ids: IntMap<NodeId, NodeId>,
+    /// Recording stream information shared with subscribed varlink clients.
+    pub recording_info: IntMap<NodeId, cosmic_settings_audio_core::RecordingInfo>,
+    /// Raw PipeWire `target.object` values for recording streams.
+    recording_targets: IntMap<NodeId, String>,
+    /// Resolved source node IDs for recording streams with explicit targets.
+    recording_source_ids: IntMap<NodeId, NodeId>,
 
     /** Device object information */
 
@@ -189,9 +197,13 @@ impl Model {
             sink_node_ids: Default::default(),
             sink_node_serials: Default::default(),
             source_node_ids: Default::default(),
+            source_node_serials: Default::default(),
             playback_info: Default::default(),
             playback_targets: Default::default(),
             playback_sink_ids: Default::default(),
+            recording_info: Default::default(),
+            recording_targets: Default::default(),
+            recording_source_ids: Default::default(),
             device_info: Default::default(),
             device_profiles: Default::default(),
             active_profiles: Default::default(),
@@ -474,6 +486,8 @@ impl Model {
                 let nodes = self.node_info.clone();
                 let playback = self.playback_info.clone();
                 let playback_sinks = self.playback_sink_ids.clone();
+                let recording = self.recording_info.clone();
+                let recording_sources = self.recording_source_ids.clone();
                 let profiles = self.device_profiles.clone();
                 let routes = self.device_routes.clone();
                 let active_profiles = self.active_profiles.clone();
@@ -537,6 +551,18 @@ impl Model {
                         .chain(playback_sinks.into_iter().map(|(playback_id, sink_id)| {
                             Event::PlaybackTarget(playback_id, Some(sink_id))
                         }))
+                        .chain(
+                            recording
+                                .into_iter()
+                                .map(|(node_id, info)| Event::Recording(node_id, info)),
+                        )
+                        .chain(
+                            recording_sources
+                                .into_iter()
+                                .map(|(recording_id, source_id)| {
+                                    Event::RecordingTarget(recording_id, Some(source_id))
+                                }),
+                        )
                         .chain(default_sink.into_iter().map(Event::DefaultSink))
                         .chain(default_source.into_iter().map(Event::DefaultSource))
                         .chain(
@@ -1010,6 +1036,13 @@ impl Model {
 
                     pipewire::MediaClass::Source => {
                         self.source_node_ids.push(node.object_id);
+                        self.source_node_serials
+                            .insert(node.object_id, node.object_serial);
+
+                        let recording_ids = self.recording_targets.keys().collect::<Vec<_>>();
+                        for recording_id in recording_ids {
+                            self.refresh_recording_target(recording_id, false).await;
+                        }
 
                         // Set the source as the default if it matches the server.
                         if self.active_source_node_name == node.node_name {
@@ -1029,7 +1062,7 @@ impl Model {
                     }
 
                     pipewire::MediaClass::Playback => {
-                        let Some(playback) = node.playback else {
+                        let Some(playback) = node.stream else {
                             tracing::warn!(
                                 target: "audio-backend",
                                 node_id = node.object_id,
@@ -1049,6 +1082,31 @@ impl Model {
                         self.playback_info.insert(node.object_id, info.clone());
                         self.emit_event(Event::Playback(node.object_id, info)).await;
                         self.refresh_playback_target(node.object_id, true).await;
+                    }
+
+                    pipewire::MediaClass::Record => {
+                        let Some(record) = node.stream else {
+                            tracing::warn!(
+                                target: "audio-backend",
+                                node_id = node.object_id,
+                                "recording node missing stream metadata"
+                            );
+                            return;
+                        };
+
+                        let info = cosmic_settings_audio_core::RecordingInfo {
+                            application_id: record.application_id,
+                            application_name: record.application_name,
+                            icon_name: record.icon_name,
+                            media_name: record.media_name,
+                            node_name: node.node_name,
+                            state: stream_state(&node.state),
+                        };
+
+                        self.recording_info.insert(node.object_id, info.clone());
+                        self.emit_event(Event::Recording(node.object_id, info))
+                            .await;
+                        self.refresh_recording_target(node.object_id, true).await;
                     }
                 }
 
@@ -1082,16 +1140,28 @@ impl Model {
                 });
             }
 
-            pipewire::Event::PlaybackTarget(id, target) => {
-                match target {
-                    Some(target) => {
-                        self.playback_targets.insert(id, target);
+            pipewire::Event::StreamTarget(id, target) => {
+                if self.recording_info.contains_key(id) {
+                    match target {
+                        Some(target) => {
+                            self.recording_targets.insert(id, target);
+                        }
+                        None => {
+                            self.recording_targets.remove(id);
+                        }
                     }
-                    None => {
-                        self.playback_targets.remove(id);
+                    self.refresh_recording_target(id, true).await;
+                } else {
+                    match target {
+                        Some(target) => {
+                            self.playback_targets.insert(id, target);
+                        }
+                        None => {
+                            self.playback_targets.remove(id);
+                        }
                     }
+                    self.refresh_playback_target(id, true).await;
                 }
-                self.refresh_playback_target(id, true).await;
             }
 
             pipewire::Event::DefaultSink(node_name) => {
@@ -1123,6 +1193,11 @@ impl Model {
                 } else {
                     tracing::warn!(target: "audio-backend", node_name = self.active_source_node_name, "default source node ID not found");
                     self.active_source_not_found = true;
+                }
+
+                let recording_ids = self.recording_info.keys().collect::<Vec<_>>();
+                for recording_id in recording_ids {
+                    self.refresh_recording_target(recording_id, false).await;
                 }
             }
 
@@ -1174,6 +1249,48 @@ impl Model {
         }
     }
 
+    async fn refresh_recording_target(&mut self, recording_id: NodeId, force: bool) {
+        if !self.recording_info.contains_key(recording_id) {
+            return;
+        }
+
+        let source_id = self
+            .recording_targets
+            .get(recording_id)
+            .and_then(|target| {
+                if let Ok(serial) = target.parse::<u64>() {
+                    self.source_node_serials
+                        .iter()
+                        .find_map(|(id, value)| (*value == serial).then_some(id))
+                        .or_else(|| {
+                            self.sink_node_serials
+                                .iter()
+                                .find_map(|(id, value)| (*value == serial).then_some(id))
+                        })
+                } else {
+                    self.node_info.iter().find_map(|(id, node)| {
+                        (!node.is_sink && node.name == *target).then_some(id)
+                    })
+                }
+            })
+            .or(self.active_source_node);
+        let previous = self.recording_source_ids.get(recording_id).copied();
+
+        match source_id {
+            Some(source_id) => {
+                self.recording_source_ids.insert(recording_id, source_id);
+            }
+            None => {
+                self.recording_source_ids.remove(recording_id);
+            }
+        }
+
+        if force || previous != source_id {
+            self.emit_event(Event::RecordingTarget(recording_id, source_id))
+                .await;
+        }
+    }
+
     async fn remove_device(&mut self, id: DeviceId) {
         tracing::debug!(target: "audio-backend", "Device {id} removed");
         _ = self.device_headset_check.remove(id);
@@ -1211,6 +1328,10 @@ impl Model {
         _ = self.playback_targets.remove(id);
         _ = self.playback_sink_ids.remove(id);
         _ = self.sink_node_serials.remove(id);
+        _ = self.recording_info.remove(id);
+        _ = self.recording_targets.remove(id);
+        _ = self.recording_source_ids.remove(id);
+        _ = self.source_node_serials.remove(id);
 
         let affected_playback = self
             .playback_sink_ids
@@ -1219,6 +1340,15 @@ impl Model {
             .collect::<Vec<_>>();
         for playback_id in affected_playback {
             self.refresh_playback_target(playback_id, false).await;
+        }
+
+        let affected_recordings = self
+            .recording_source_ids
+            .iter()
+            .filter_map(|(recording_id, source_id)| (*source_id == id).then_some(recording_id))
+            .collect::<Vec<_>>();
+        for recording_id in affected_recordings {
+            self.refresh_recording_target(recording_id, false).await;
         }
         _ = self.node_devices.remove(id);
         _ = self.node_mute.remove(id);
@@ -1344,6 +1474,17 @@ pub async fn pactl_set_default_source(node_name: &str) {
         .stderr(Stdio::null())
         .status()
         .await;
+}
+
+/// Convert a PipeWire node state to its audio-core equivalent.
+fn stream_state(state: &pipewire::node::State) -> cosmic_settings_audio_core::StreamState {
+    match state {
+        pipewire::node::State::Idle => cosmic_settings_audio_core::StreamState::Idle,
+        pipewire::node::State::Running => cosmic_settings_audio_core::StreamState::Running,
+        pipewire::node::State::Creating => cosmic_settings_audio_core::StreamState::Creating,
+        pipewire::node::State::Suspended => cosmic_settings_audio_core::StreamState::Suspended,
+        pipewire::node::State::Error(_) => cosmic_settings_audio_core::StreamState::Error,
+    }
 }
 
 pub fn pipewire_profile_to_cosmic(
