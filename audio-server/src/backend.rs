@@ -64,6 +64,7 @@ pub struct Model {
     node_devices: IntMap<NodeId, DeviceId>,
     /// Information about nodes that are shared with subscribed varlink clients.
     node_info: IntMap<NodeId, cosmic_settings_audio_core::NodeInfo>,
+
     /// Track mute status of nodes.
     pub node_mute: IntMap<NodeId, bool>,
     /// Track volume and volume balance of nodes.
@@ -1222,7 +1223,6 @@ impl Model {
         }
         _ = self.node_devices.remove(id);
         _ = self.node_mute.remove(id);
-
         _ = self.node_volumes.remove(id);
 
         self.emit_event(Event::RemoveNode(id)).await;
@@ -1259,7 +1259,7 @@ impl Model {
             .unwrap_or_default();
     }
 
-    async fn update_node_properties(&mut self, id: DeviceId, props: NodeProps) {
+    async fn update_node_properties(&mut self, id: NodeId, props: NodeProps) {
         let is_active_sink = self.active_sink_node == Some(id);
         let is_active_source = self.active_source_node == Some(id);
 
