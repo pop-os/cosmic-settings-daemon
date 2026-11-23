@@ -27,7 +27,7 @@ use libspa::utils::SpaTypes;
 use pipewire::device::{DeviceChangeMask, DeviceListener};
 use pipewire::main_loop::MainLoopWeak;
 use pipewire::metadata::MetadataListener;
-use pipewire::node::NodeListener;
+use pipewire::node::{NodeChangeMask, NodeListener};
 use pipewire::proxy::{ProxyListener, ProxyT};
 use pipewire::registry::{GlobalObject, Registry};
 use pipewire::types::ObjectType;
@@ -126,7 +126,6 @@ fn run_service(
             }
 
             Request::SetNodeVolume(id, volume, balance) => {
-                tracing::debug!(id, volume, ?balance, "SetNodeVolume");
                 if let Some(state) = state.upgrade() {
                     state.borrow_mut().set_node_volume(id, volume, balance);
                 }
@@ -219,27 +218,25 @@ where
             let state = Rc::downgrade(&state);
             move |info| {
                 let change_mask = info.change_mask();
-                if change_mask == DeviceChangeMask::PARAMS {
-                    if let Some(state) = state.upgrade() {
-                        let state = state.borrow();
-                        let Some((_device_id, device, ..)) = state.proxies.devices.get(pw_id)
-                        else {
-                            return;
-                        };
-
-                        device.enum_params(1, Some(ParamType::EnumRoute), 0, u32::MAX);
-                        device.enum_params(1, Some(ParamType::Route), 0, u32::MAX);
-                        device.enum_params(1, Some(ParamType::EnumProfile), 0, u32::MAX);
-                        device.enum_params(1, Some(ParamType::Profile), 0, u32::MAX);
-                    }
-
-                    return;
-                }
-
-                if let Some(device) = Device::from_device(info)
+                if change_mask.contains(DeviceChangeMask::PROPS)
+                    && let Some(device) = Device::from_device(info)
                     && let Some(state) = state.upgrade()
                 {
                     state.borrow_mut().add_device(pw_id, device);
+                }
+
+                if change_mask.contains(DeviceChangeMask::PARAMS)
+                    && let Some(state) = state.upgrade()
+                {
+                    let state = state.borrow();
+                    let Some((_device_id, device, ..)) = state.proxies.devices.get(pw_id) else {
+                        return;
+                    };
+
+                    device.enum_params(1, Some(ParamType::EnumRoute), 0, u32::MAX);
+                    device.enum_params(1, Some(ParamType::Route), 0, u32::MAX);
+                    device.enum_params(1, Some(ParamType::EnumProfile), 0, u32::MAX);
+                    device.enum_params(1, Some(ParamType::Profile), 0, u32::MAX);
                 }
             }
         })
@@ -327,10 +324,19 @@ where
         .info({
             let state = Rc::downgrade(&state);
             move |info| {
-                if let Some(node) = Node::from_node(info)
+                let change_mask = info.change_mask();
+                if change_mask.contains(NodeChangeMask::PROPS)
+                    && let Some(node) = Node::from_node(info)
                     && let Some(state) = state.upgrade()
                 {
                     state.borrow_mut().add_node(id, node);
+                }
+
+                if change_mask.contains(NodeChangeMask::PARAMS)
+                    && let Some(state) = state.upgrade()
+                    && let Some((node, ..)) = state.borrow().proxies.nodes.get(id)
+                {
+                    node.enum_params(0, Some(ParamType::Props), 0, u32::MAX);
                 }
             }
         })
@@ -640,16 +646,22 @@ impl State {
 
     fn add_device(&mut self, id: PipewireId, device: Device) {
         tracing::debug!(target: "audio-backend", id, "add_device {}", device.id);
+        let mut enumerate_device = false;
+
         // Map the device's pipewire ID to its device ID
         if let Some(entry) = self.proxies.devices.get_mut(id) {
+            if entry.0 == 0 {
+                enumerate_device = true;
+            }
+
             entry.0 = device.id;
         };
 
-        let device_id = device.id;
-        self.on_event(Event::AddDevice(device));
+        if enumerate_device {
+            self.enumerate_device(device.id);
+        }
 
-        // Request the device's profiles and properties now that we've registered it.
-        self.enumerate_device(device_id);
+        self.on_event(Event::AddDevice(device));
     }
 
     fn add_node(&mut self, id: PipewireId, node: Node) {
@@ -902,7 +914,6 @@ impl State {
 
         if let Some(param) = Pod::from_bytes(&serialized) {
             device.set_param(ParamType::Route, 0, param);
-            device.enum_params(0, Some(ParamType::Route), 0, u32::MAX);
         }
     }
 
