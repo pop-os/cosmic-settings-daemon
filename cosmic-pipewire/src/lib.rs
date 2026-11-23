@@ -600,7 +600,6 @@ struct Proxies {
 #[derive(Debug, Clone)]
 struct NodeMeta {
     pub id: NodeId,
-    pub node_driver_id: Option<u32>,
     pub is_bluez_internal: bool,
     pub is_bluez_loopback: bool,
     pub description: Box<str>,
@@ -678,22 +677,19 @@ impl State {
         let is_bluez_internal = node.bluez.is_some() && node.is_internal;
 
         // Track the node's node ID and device ID by its pipewire ID.
-        self.nodes.entry(id).or_insert_with(|| {
-            let meta = NodeMeta {
-                id: node.object_id,
-                node_driver_id: node.node_driver_id,
-                is_bluez_internal,
-                is_bluez_loopback: node
-                    .bluez
-                    .as_ref()
-                    .is_some_and(|b| b.sink_loopback || b.source_loopback),
-                media_class: node.media_class,
-                description: node.description.clone().into_boxed_str(),
-            };
+        let meta = NodeMeta {
+            id: node.object_id,
+            is_bluez_internal,
+            is_bluez_loopback: node
+                .bluez
+                .as_ref()
+                .is_some_and(|b| b.sink_loopback || b.source_loopback),
+            media_class: node.media_class,
+            description: node.description.clone().into_boxed_str(),
+        };
 
-            tracing::debug!("adding node (pw id {id}) {meta:#?}");
-            meta
-        });
+        tracing::debug!("adding node (pw id {id}) {meta:#?}");
+        self.nodes.insert(id, meta);
 
         // And the associated route device that the node is derived from.
         if let Some(card_profile_device) = node.card_profile_device {
@@ -957,8 +953,8 @@ impl State {
         let mut id = node.id;
         if node.is_bluez_internal {
             for other_node in self.nodes.values() {
-                if other_node.media_class == node.media_class
-                    && other_node.node_driver_id == Some(node.id)
+                if other_node.id != node.id
+                    && other_node.media_class == node.media_class
                     && other_node.description == node.description
                 {
                     id = other_node.id;
