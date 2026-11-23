@@ -324,7 +324,7 @@ fn set_node_volume(
     volume: u32,
     balance: Option<f32>,
 ) -> Result<Volume, Error> {
-    tracing::debug!(target: "varlink", node_id, volume, balance, "set_node_volume");
+    tracing::debug!(node_id, volume, balance, "set_node_volume");
     let entry = model.node_volumes.entry(node_id).or_default();
     entry.0 = volume;
     entry.1 = balance;

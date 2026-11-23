@@ -27,7 +27,7 @@ use libspa::utils::SpaTypes;
 use pipewire::device::{DeviceChangeMask, DeviceListener};
 use pipewire::main_loop::MainLoopWeak;
 use pipewire::metadata::MetadataListener;
-use pipewire::node::NodeListener;
+use pipewire::node::{NodeChangeMask, NodeListener};
 use pipewire::proxy::{ProxyListener, ProxyT};
 use pipewire::registry::{GlobalObject, Registry};
 use pipewire::types::ObjectType;
@@ -126,7 +126,6 @@ fn run_service(
             }
 
             Request::SetNodeVolume(id, volume, balance) => {
-                tracing::debug!(id, volume, ?balance, "SetNodeVolume");
                 if let Some(state) = state.upgrade() {
                     state.borrow_mut().set_node_volume(id, volume, balance);
                 }
@@ -219,27 +218,25 @@ where
             let state = Rc::downgrade(&state);
             move |info| {
                 let change_mask = info.change_mask();
-                if change_mask == DeviceChangeMask::PARAMS {
-                    if let Some(state) = state.upgrade() {
-                        let state = state.borrow();
-                        let Some((_device_id, device, ..)) = state.proxies.devices.get(pw_id)
-                        else {
-                            return;
-                        };
-
-                        device.enum_params(1, Some(ParamType::EnumRoute), 0, u32::MAX);
-                        device.enum_params(1, Some(ParamType::Route), 0, u32::MAX);
-                        device.enum_params(1, Some(ParamType::EnumProfile), 0, u32::MAX);
-                        device.enum_params(1, Some(ParamType::Profile), 0, u32::MAX);
-                    }
-
-                    return;
-                }
-
-                if let Some(device) = Device::from_device(info)
+                if change_mask.contains(DeviceChangeMask::PROPS)
+                    && let Some(device) = Device::from_device(info)
                     && let Some(state) = state.upgrade()
                 {
                     state.borrow_mut().add_device(pw_id, device);
+                }
+
+                if change_mask.contains(DeviceChangeMask::PARAMS)
+                    && let Some(state) = state.upgrade()
+                {
+                    let state = state.borrow();
+                    let Some((_device_id, device, ..)) = state.proxies.devices.get(pw_id) else {
+                        return;
+                    };
+
+                    device.enum_params(1, Some(ParamType::EnumRoute), 0, u32::MAX);
+                    device.enum_params(1, Some(ParamType::Route), 0, u32::MAX);
+                    device.enum_params(1, Some(ParamType::EnumProfile), 0, u32::MAX);
+                    device.enum_params(1, Some(ParamType::Profile), 0, u32::MAX);
                 }
             }
         })
@@ -327,10 +324,19 @@ where
         .info({
             let state = Rc::downgrade(&state);
             move |info| {
-                if let Some(node) = Node::from_node(info)
+                let change_mask = info.change_mask();
+                if change_mask.contains(NodeChangeMask::PROPS)
+                    && let Some(node) = Node::from_node(info)
                     && let Some(state) = state.upgrade()
                 {
                     state.borrow_mut().add_node(id, node);
+                }
+
+                if change_mask.contains(NodeChangeMask::PARAMS)
+                    && let Some(state) = state.upgrade()
+                    && let Some((node, ..)) = state.borrow().proxies.nodes.get(id)
+                {
+                    node.enum_params(0, Some(ParamType::Props), 0, u32::MAX);
                 }
             }
         })
@@ -345,14 +351,14 @@ where
                     return;
                 };
 
-                let Some(&(node_id, ..)) = state.borrow().proxies.nodes.get(id) else {
+                let Some(node) = state.borrow().nodes.get(id).cloned() else {
                     return;
                 };
 
                 if param_type == ParamType::Props
                     && let Some(props) = NodeProps::from_pod(pod)
                 {
-                    state.borrow_mut().set_node_props(node_id, props);
+                    state.borrow_mut().set_node_props(&node, props);
                 }
             }
         })
@@ -375,7 +381,7 @@ where
         .borrow_mut()
         .proxies
         .nodes
-        .insert(id, (0, node, listener, remove_listener));
+        .insert(id, (node, listener, remove_listener));
 }
 
 fn bind_metadata<P>(registry: &Registry, obj: &GlobalObject<P>, state: Rc<RefCell<State>>)
@@ -579,7 +585,7 @@ struct Proxies {
             ProxyListener,
         ),
     >,
-    nodes: IntMap<PipewireId, (NodeId, pipewire::node::Node, NodeListener, ProxyListener)>,
+    nodes: IntMap<PipewireId, (pipewire::node::Node, NodeListener, ProxyListener)>,
     metadata: IntMap<
         PipewireId,
         (
@@ -591,6 +597,15 @@ struct Proxies {
     >,
 }
 
+#[derive(Debug, Clone)]
+struct NodeMeta {
+    pub id: NodeId,
+    pub is_bluez_internal: bool,
+    pub is_bluez_loopback: bool,
+    pub description: Box<str>,
+    pub media_class: MediaClass,
+}
+
 struct State {
     main_loop: MainLoopWeak,
     /// Stores pipewire objects that we are monitoring.
@@ -600,7 +615,7 @@ struct State {
     /// Default sink node name.
     default_sink_name: String,
     /// Associates the pipewire ID of a node to its node and device IDs.
-    nodes: IntMap<PipewireId, (NodeId, Option<DeviceId>)>,
+    nodes: IntMap<PipewireId, NodeMeta>,
     /// Routes which are currently in use by devices.
     active_routes: IntMap<DeviceId, Vec<Route>>,
     /// Routes which are supported by devices.
@@ -640,28 +655,41 @@ impl State {
 
     fn add_device(&mut self, id: PipewireId, device: Device) {
         tracing::debug!(target: "audio-backend", id, "add_device {}", device.id);
+        let mut enumerate_device = false;
+
         // Map the device's pipewire ID to its device ID
         if let Some(entry) = self.proxies.devices.get_mut(id) {
+            if entry.0 == 0 {
+                enumerate_device = true;
+            }
+
             entry.0 = device.id;
         };
 
-        let device_id = device.id;
-        self.on_event(Event::AddDevice(device));
+        if enumerate_device {
+            self.enumerate_device(device.id);
+        }
 
-        // Request the device's profiles and properties now that we've registered it.
-        self.enumerate_device(device_id);
+        self.on_event(Event::AddDevice(device));
     }
 
     fn add_node(&mut self, id: PipewireId, node: Node) {
-        // Map the device's pipewire ID to its device ID
-        if let Some(entry) = self.proxies.nodes.get_mut(id) {
-            entry.0 = node.object_id;
-            // Request properties for this node now that we've registered it.
-            entry.1.enum_params(0, Some(ParamType::Props), 0, u32::MAX);
-        };
+        let is_bluez_internal = node.bluez.is_some() && node.is_internal;
 
         // Track the node's node ID and device ID by its pipewire ID.
-        self.nodes.insert(id, (node.object_id, node.device_id));
+        let meta = NodeMeta {
+            id: node.object_id,
+            is_bluez_internal,
+            is_bluez_loopback: node
+                .bluez
+                .as_ref()
+                .is_some_and(|b| b.sink_loopback || b.source_loopback),
+            media_class: node.media_class,
+            description: node.description.clone().into_boxed_str(),
+        };
+
+        tracing::debug!("adding node (pw id {id}) {meta:#?}");
+        self.nodes.insert(id, meta);
 
         // And the associated route device that the node is derived from.
         if let Some(card_profile_device) = node.card_profile_device {
@@ -674,7 +702,9 @@ impl State {
             self.node_devices.insert(node.object_id, device_id);
         }
 
-        self.on_event(Event::AddNode(node));
+        if !is_bluez_internal {
+            self.on_event(Event::AddNode(node));
+        }
     }
 
     fn add_profile(&mut self, id: DeviceId, index: u32, profile: Profile) {
@@ -764,15 +794,15 @@ impl State {
         self.proxies.metadata.remove(id);
     }
 
-    fn remove_node(&mut self, id: PipewireId) {
-        if let Some((node_id, _)) = self.nodes.remove(id) {
-            self.node_card_profile_device.remove(node_id);
-            self.node_devices.remove(node_id);
-            self.node_props.remove(node_id);
-            self.on_event(Event::RemoveNode(node_id));
+    fn remove_node(&mut self, pw_id: PipewireId) {
+        if let Some(NodeMeta { id, .. }) = self.nodes.remove(pw_id) {
+            self.node_card_profile_device.remove(id);
+            self.node_devices.remove(id);
+            self.node_props.remove(id);
+            self.on_event(Event::RemoveNode(id));
         }
 
-        self.proxies.nodes.remove(id);
+        self.proxies.nodes.remove(pw_id);
     }
 
     fn set_mute(&self, id: DeviceId, route_device: i32, route: &Route, mute: bool) {
@@ -902,18 +932,40 @@ impl State {
 
         if let Some(param) = Pod::from_bytes(&serialized) {
             device.set_param(ParamType::Route, 0, param);
-            device.enum_params(0, Some(ParamType::Route), 0, u32::MAX);
         }
     }
 
-    fn set_node_props(&mut self, id: NodeId, props: NodeProps) {
-        let prev_props = self.node_props.entry(id).or_default();
-        if *prev_props == props {
+    fn set_node_props(&mut self, node: &NodeMeta, props: NodeProps) {
+        // Ignore volume updates for bluez loopback devices
+        if node.is_bluez_loopback {
             return;
         }
 
-        *prev_props = props.clone();
-        self.on_event(Event::NodeProperties(id, props.clone()));
+        let current_props = self.node_props.entry(node.id).or_default();
+        let prev_props = current_props.clone();
+        current_props.merge(props);
+        if prev_props == *current_props {
+            return;
+        }
+        let current_props = current_props.clone();
+        tracing::debug!("set_node_props volume on {} to {current_props:?}", node.id);
+
+        let mut id = node.id;
+        if node.is_bluez_internal {
+            for other_node in self.nodes.values() {
+                if other_node.id != node.id
+                    && other_node.media_class == node.media_class
+                    && other_node.description == node.description
+                {
+                    id = other_node.id;
+                    break;
+                }
+            }
+        }
+
+        self.node_props.insert(id, current_props.clone());
+        tracing::debug!("apply volume on {} to {current_props:?}", id);
+        self.on_event(Event::NodeProperties(id, current_props));
     }
 
     fn set_node_volume(&self, id: NodeId, volume: f32, balance: Option<f32>) {
@@ -1102,11 +1154,13 @@ impl State {
     }
 
     fn node(&self, id: NodeId) -> Option<&pipewire::node::Node> {
-        self.proxies
-            .nodes
-            .values()
-            .find(|(node_id, ..)| id == *node_id)
-            .map(|(_, node, ..)| node)
+        self.nodes.iter().find_map(|(pw_id, node)| {
+            if id == node.id {
+                self.proxies.nodes.get(pw_id).map(|v| &v.0)
+            } else {
+                None
+            }
+        })
     }
 }
 

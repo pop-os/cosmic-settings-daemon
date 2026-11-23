@@ -9,6 +9,12 @@ use libspa::utils::Id;
 use pipewire::node::{NodeInfoRef, NodeState};
 use std::ffi::c_float;
 
+#[derive(Clone, Debug, Default)]
+pub struct BluezMeta {
+    pub sink_loopback: bool,
+    pub source_loopback: bool,
+}
+
 /// Node information
 #[must_use]
 #[derive(Clone, Debug)]
@@ -16,17 +22,21 @@ pub struct Node {
     pub object_id: u32,
     pub object_serial: u64,
     pub audio_channels: u32,
-    pub audio_position: String,
-    pub card_profile_device: Option<u32>,
-    pub description: String,
     pub device_id: Option<u32>,
-    pub device_profile_description: String,
+    pub node_driver_id: Option<u32>,
+    pub card_profile_device: Option<u32>,
     pub device_profile_pro: bool,
+    pub is_internal: bool,
+    pub is_virtual: bool,
+    pub description: String,
+    pub device_profile_description: String,
     pub icon_name: String,
+    pub audio_position: String,
     pub media_class: MediaClass,
     pub node_name: String,
     pub playback: Option<PlaybackInfo>,
     pub state: State,
+    pub bluez: Option<BluezMeta>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -46,7 +56,7 @@ pub enum State {
     Error(String),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum MediaClass {
     Source,
     Sink,
@@ -68,6 +78,7 @@ impl Node {
         let mut device_id = None;
         let mut device_profile_description: &str = "";
         let mut device_profile_pro = false;
+        let mut is_virtual = false;
         let mut icon_name = String::new();
         let mut media_class = None;
         let mut media_name = None;
@@ -75,9 +86,26 @@ impl Node {
         let mut node_name = String::new();
         let mut object_id = None;
         let mut object_serial = None;
+        let mut node_driver_id = None;
+        let mut is_internal = false;
+        let mut bluez = None;
 
         for (entry, value) in props.iter() {
             match entry {
+                "bluez5.sink-loopback" => {
+                    if let Ok(value) = value.parse::<bool>() {
+                        let mut update: BluezMeta = bluez.unwrap_or_default();
+                        update.sink_loopback = value;
+                        bluez = Some(update);
+                    }
+                }
+                "bluez5.source-loopback" => {
+                    if let Ok(value) = value.parse::<bool>() {
+                        let mut update: BluezMeta = bluez.unwrap_or_default();
+                        update.source_loopback = value;
+                        bluez = Some(update);
+                    }
+                }
                 "device.id" => device_id = value.parse::<u32>().ok(),
                 "object.id" => object_id = Some(value.parse::<u32>().ok()?),
                 "object.serial" => object_serial = Some(value.parse::<u64>().ok()?),
@@ -108,7 +136,15 @@ impl Node {
                 "media.class" => {
                     media_class = Some(match value {
                         "Audio/Sink" => MediaClass::Sink,
+                        "Audio/Sink/Internal" => {
+                            is_internal = true;
+                            MediaClass::Sink
+                        }
                         "Audio/Source" => MediaClass::Source,
+                        "Audio/Source/Internal" => {
+                            is_internal = true;
+                            MediaClass::Source
+                        }
                         "Stream/Output/Audio" => MediaClass::Playback,
                         _ => return None,
                     })
@@ -120,6 +156,12 @@ impl Node {
 
                 // Family 17h/19h HD Audio Controller Analog Stereo
                 "node.description" => node_description = value,
+
+                // 90
+                "node.driver-id" => node_driver_id = value.parse::<u32>().ok(),
+
+                // true
+                "node.virtual" => is_virtual = value.parse::<bool>().unwrap_or_default(),
 
                 _ => (),
             }
@@ -154,7 +196,11 @@ impl Node {
             audio_channels,
             audio_position,
             node_name,
+            node_driver_id,
+            is_internal,
+            is_virtual,
             playback,
+            bluez,
             state: match info.state() {
                 NodeState::Idle => State::Idle,
                 NodeState::Running => State::Running,
@@ -204,7 +250,7 @@ impl std::cmp::Eq for NodeProps {}
 impl NodeProps {
     pub fn from_pod(pod: &Pod) -> Option<Self> {
         let props = pod.as_object().ok()?;
-        let props = NodeProps {
+        let mut props = NodeProps {
             mute: props
                 .find_prop(Id(libspa_sys::SPA_PROP_mute))
                 .and_then(|prop| prop.value().get_bool().ok()),
@@ -218,6 +264,14 @@ impl NodeProps {
                 .find_prop(Id(libspa_sys::SPA_PROP_channelVolumes))
                 .and_then(|prop| unsafe { array_from_pod::<c_float>(prop.value()) }),
         };
+
+        if props.channel_map.as_ref().is_some_and(|v| v.is_empty()) {
+            props.channel_map = None;
+        }
+
+        if props.channel_volumes.as_ref().is_some_and(|v| v.is_empty()) {
+            props.channel_volumes = None;
+        }
 
         if props.mute.is_none()
             && props.monitor_mute.is_none()

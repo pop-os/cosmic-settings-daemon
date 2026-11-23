@@ -355,7 +355,12 @@ fn backlight_monitor() -> io::Result<AsyncFd<udev::MonitorSocket>> {
     let socket = udev::MonitorBuilder::new()?
         .match_subsystem("backlight")?
         .listen()?;
-    AsyncFd::with_interest(socket, Interest::READABLE | Interest::WRITABLE)
+
+    // SAFETY: AsyncFd takes ownership of the udev monitor socket so it will not be closed.
+    unsafe {
+        AsyncFd::register_with_interest(socket, Interest::READABLE | Interest::WRITABLE)
+            .map_err(|why| io::Error::other(format!("{why}")))
+    }
 }
 
 // Choose backlight with most "precision". This is what `light` does.
