@@ -707,10 +707,7 @@ impl State {
         }
 
         if !is_bluez_internal {
-            tracing::info!("using node {node:#?}");
             self.on_event(Event::AddNode(node));
-        } else {
-            tracing::error!("ignoring node {node:#?}");
         }
     }
 
