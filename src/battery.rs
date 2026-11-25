@@ -1,6 +1,5 @@
 use futures::FutureExt;
 use notify_rust::Notification;
-use std::path::Path;
 use std::pin::Pin;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::Receiver;
@@ -174,7 +173,12 @@ pub async fn low_power_monitor() {
                             }
 
                             current_battery = BatteryLevel::Low;
-                            crate::pipewire::play_sound("Pop", "battery-caution");
+                            tokio::task::spawn(async {
+                                cosmic_sound_theme::select(&["battery-caution"])
+                                    .notification_role()
+                                    .play()
+                                    .await;
+                            });
 
                             let now = Instant::now();
                             if now.duration_since(last_low_notification) > Duration::from_secs(5) {
@@ -196,7 +200,12 @@ pub async fn low_power_monitor() {
                             }
 
                             current_battery = BatteryLevel::Full;
-                            crate::pipewire::play_sound("Pop", "battery-full");
+                            tokio::task::spawn(async {
+                                cosmic_sound_theme::select(&["battery-full"])
+                                    .notification_role()
+                                    .play()
+                                    .await;
+                            });
                         }
 
                         _ => {
@@ -225,7 +234,12 @@ async fn critical_battery_nag(mut watch: Receiver<bool>) {
                     _ => break,
                 }
 
-                crate::pipewire::play_sound("Pop", "battery-low");
+                tokio::task::spawn(async {
+                    cosmic_sound_theme::select(&["battery-low"])
+                        .notification_role()
+                        .play()
+                        .await
+                });
             },
             Some(false) => (),
             None => break,
@@ -235,15 +249,18 @@ async fn critical_battery_nag(mut watch: Receiver<bool>) {
 
 /// Play a power plug sound on an AC plug event.
 fn on_ac_plug(is_plugged: bool, battery_level: BatteryLevel) {
-    let (theme, sound) = if is_plugged {
-        ("freedesktop", "power-plug")
-    } else if Path::new("/usr/share/sounds/Pop/").exists()
-        && matches!(battery_level, BatteryLevel::Low | BatteryLevel::Critical)
-    {
-        ("Pop", "power-unplug-battery-low")
-    } else {
-        ("freedesktop", "power-unplug")
-    };
+    tokio::task::spawn(async move {
+        let sounds = if is_plugged {
+            &["power-plug"][..]
+        } else if matches!(battery_level, BatteryLevel::Low | BatteryLevel::Critical) {
+            &["power-unplug-battery-low", "battery-low", "power-unplug"][..]
+        } else {
+            &["power-unplug"][..]
+        };
 
-    crate::pipewire::play_sound(theme, sound);
+        cosmic_sound_theme::select(sounds)
+            .notification_role()
+            .play()
+            .await;
+    });
 }

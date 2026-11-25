@@ -34,7 +34,6 @@ mod greeter;
 mod locale;
 mod location;
 mod logind_session;
-mod pipewire;
 mod theme;
 mod time;
 mod utils;
