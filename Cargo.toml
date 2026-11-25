@@ -20,11 +20,13 @@ members = [
     "geonames",
     "cosmic-pipewire",
     "varlink-server",
+    "cosmic-sound-theme",
 ]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
+tokio = { version = "1.54.1" }
 
 [workspace.dependencies.zlink]
 version = "0.8"
@@ -42,6 +44,7 @@ cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", feat
     "greeter",
 ] }
 cosmic-settings-varlink-server = { path = "./varlink-server" }
+cosmic-sound-theme = { path = "./cosmic-sound-theme" }
 cosmic-theme.export = true
 cosmic-theme.workspace = true
 ddc-hi = "0.4.1"
@@ -52,18 +55,16 @@ geonames = { path = "geonames" }
 libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false }
 locale1-zbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
 log = "0.4.35"
-memoize = "0.6"
 notify = "8.2.1"
 notify-rust = "4.18.2"
 serde = "1.0.229"
 sunrise = "2.1.0"
-tokio = { version = "1.54.1", features = ["macros", "net", "rt", "signal"] }
+tokio = { workspace = true, features = ["macros", "net", "rt", "signal"] }
 tokio-stream = "0.1.19"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 udev = "0.9.3"
 upower-zbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
-walkdir = "2.5.0"
 zbus = { version = "6.2.1", default-features = false, features = ["tokio"] }
 cctk = { package = "cosmic-client-toolkit", git = "https://github.com/pop-os/cosmic-protocols" }
 calloop = "0.14.5"
